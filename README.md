@@ -6,7 +6,7 @@ _EVERYTHING BELOW HERE IS TEMPORARY DURING THE MIGRATION OUT OF `gabien-common`.
 
 Datum is an S-expression format meant for quick implementation in various languages.
 
-It has a specification, available at <https://github.com/20kdc/gabien-common/blob/master/datum/specification.md>.
+It has a specification, available at [./spec](./spec).
 
 It was originally developed for use in some of my Java programs for the purpose of fulfilling the role of 'terse data language,' with some key distinctions:
 
