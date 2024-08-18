@@ -4,13 +4,12 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<groupId>t20kdc.hs2</groupId>
-	<artifactId>gabien-datum</artifactId>
-	<packaging>pom</packaging>
-	<version>0.666-SNAPSHOT</version> <!-- NEVER CHANGE THIS. This entire set of libraries is unstable and SHOULD NOT be system-packed. -->
+	<groupId>t20kdc.datum</groupId>
+	<artifactId>datum</artifactId>
+	<version>0.7-SNAPSHOT</version>
 
 	<name>gabien-datum</name>
-	<description>S-expression format for general use across gabien. DO NOT SYSTEM-PACKAGE - ALWAYS INCLUDE IN APPLICATION JAR.</description>
+	<description>TODO CHANGE THIS DESCRIPTION</description>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -28,4 +27,3 @@
 	</dependencies>
 
 </project>
-

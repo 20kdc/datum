@@ -32,6 +32,7 @@ In order to allow use in diverse environments, it attempts to follow some key ru
 * Shore up all the documentation
 * Figure out how to make doctests that rely on alloc while not being for alloc functions
 * If Datum is going to be a serious project I should probably move it out of the `gabien-common` umbrella. But also, that's probably going to mean the Java implementation has to be either left behind or things are going to get a little ugly. Basically, mass reorganization incoming.
+* Java version: set Maven description properly
 
 ## License
 
