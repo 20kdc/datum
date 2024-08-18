@@ -1,12 +1,8 @@
-# Datum: 'LISP-like' format meant for quick implementation in various languages
-
-_EVERYTHING BELOW HERE IS TEMPORARY DURING THE MIGRATION OUT OF `gabien-common`. Working code, and two cross-compatible implementations, exist, but there are some final changes that need to be done to the specification, and the whole project needs to be 'professionalized' before I'm willing to give it a stable version number._
-
-***
+# `datum-rs`
 
 Datum is an S-expression format meant for quick implementation in various languages.
 
-It has a specification, available at [./doc/spec](./doc/spec).
+It has a specification, available at <https://github.com/20kdc/gabien-common/blob/master/datum/specification.md>.
 
 It was originally developed for use in some of my Java programs for the purpose of fulfilling the role of 'terse data language,' with some key distinctions:
 

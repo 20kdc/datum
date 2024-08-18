@@ -139,71 +139,6 @@ It is worth mentioning the expected parsing strategy here. In essence, *Symbol t
 
 **After this point, the direct/indirect and character class distinctions cease to exist.**
 
-### Chart
-
-A chart labelled roughly by indirect values (be aware that these names aren't 1:1, check with the above):
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    state whitespace_skipping {
-        direction LR
-        state loop <<choice>>
-        [*] --> loop
-        loop --> whitespace_class
-        loop --> comment
-        loop --> [*]
-        whitespace_class --> loop
-        comment --> loop
-    }
-    state comment {
-        direction LR
-        [*] --> ;
-        ; --> not_newline
-        not_newline --> not_newline
-        not_newline --> newline
-        ; --> newline
-        newline --> [*]
-    }
-    [*] --> whitespace_skipping
-    state potential_identifier {
-        direction LR
-        [*] --> content_class
-        content_class --> [*]
-        [*] --> digit_class
-        digit_class --> [*]
-        [*] --> sign_class
-        sign_class --> [*]
-        [*] --> special_identifier_class
-        special_identifier_class --> [*]
-        digit_class --> potential_identifier_group_numeric
-        sign_class --> potential_identifier_group_numeric
-        potential_identifier_group_numeric --> [*]
-        special_identifier_class --> potential_identifier_group_special
-        potential_identifier_group_special --> [*]
-        content_class --> potential_identifier_group_id
-        potential_identifier_group_id --> [*]
-        potential_identifier_group_numeric --> potential_identifier_group_numeric
-        potential_identifier_group_special --> potential_identifier_group_special
-        potential_identifier_group_id --> potential_identifier_group_id
-    }
-    whitespace_skipping --> potential_identifier
-    potential_identifier --> [*]
-    whitespace_skipping --> alone_group
-    alone_group --> [*]
-    whitespace_skipping --> string
-    string --> [*]
-    state string {
-        direction LR
-        [*] --> "_open
-        "_open --> "_close
-        "_open --> not_"
-        not_" --> not_"
-        not_" --> "_close
-        "_close --> [*]
-    }
-```
-
 A more precise description of the state machine, including EOF handling, is available at: [./rust/src/token_core.rs](./rust/src/token_core.rs)
 
 ## Tokens To Values
@@ -234,22 +169,24 @@ However, the following special identifiers shall be considered *standardized* an
 
 This list also gives examples of how this might map to Scheme 9 From Empty Space, as an example of how interoperability works here.
 
+_All of these are 'ASCII case-insensitive'._
+
 * `#{}#`: This is actually converted into the empty symbol. This mainly exists to remove some of the error cases from writers.
 	* Scheme interop notes: Won't parse on S9FES. Custom parser could use `(string->symbol "")`.
 
-* `#t` and `#T`: These express the boolean `true` value.
+* `#t`: These express the boolean `true` value.
 	* Scheme interop notes: Should parse on all Schemes.
 
-* `#f` and `#F`: These express the boolean `false` value.
+* `#f`: These express the boolean `false` value.
 	* Scheme interop notes: Should parse on all Schemes.
 
-* `#nil` or any case variation: This represents `null` or so forth. This may or may not be an alias for `()` depending on context.
+* `#nil`: This represents `null` or so forth. This may or may not be an alias for `()` depending on context.
 	* Scheme interop notes: Won't parse on S9FES. A custom parser could alias it to `()` or define a unique signal value kind of like how `eof-object?` works.
 
-* `#i` or `#I` followed by anything (or nothing): Arbitrary Numeric token.
-	* Scheme interop notes: This is kind of an abuse of the inexactness prefix to make inf/nan work. It's done this way to remove some of the error cases from writers. It is 'more or less' Scheme-compliant for the floating-point constants, which is what it's used for in practice.
-	* Previous versions of this specification defined the floating-point constants as special IDs directly. However, the implementation of a robust Rust implementation of Datum revealed an issue: Writing certain numeric tokens would `panic!`, unacceptable in production Rust code, or would require returning an error, which would be extremely awkward to use.
-		* As Datum hasn't seen any outside use so far, the breaking changes of `#i-inf.0` now being written by the Java implementation as `-inf.0` has been considered an acceptable loss.
+* `#i` followed by anything (or nothing): Arbitrary Numeric token.
+	* Scheme interop notes: This is kind of an abuse of the inexactness prefix to make inf/nan work. It's done this way to remove some of the error cases from writers; it's 'more or less' Scheme-compliant for the floating-point constants, which is what it's used for in practice.
+
+* `#x` followed by any non-zero number of hex digits of any case: Hexadecimal integer.
 
 ### Numbers
 
@@ -258,24 +195,22 @@ The tokenization of Datum does not explicitly define the full set of *Numeric to
 Firstly, the standard formats:
 
 - The standard integer format, which *must* be supported:
-  
-  - This is any contiguous sequence of the 10 ASCII decimal digits, which may or may not be preceded by 45 `-` or 43 `+` (*this should rarely come up due to how parsing has been defined but is important*).
-    - If the result exceeds the integer limits of the implementation, the results are undefined.
-  - If the source data model makes no distinction whatsoever between floating point and integer values (i.e. it doesn't have integers, period), this format *should* be used whenever it would not lose precision, unless specified otherwise.
+	- This is any contiguous sequence of the 10 ASCII decimal digits, which may or may not be preceded by 45 `-` or 43 `+` (*this should rarely come up due to how parsing has been defined but is important*).
+		- If the result exceeds the integer limits of the implementation, the resulting value is undefined.
+	- If the source data model makes no distinction whatsoever between floating point and integer values (i.e. it doesn't have integers, period), this format *should* be used whenever it would not lose precision, unless specified otherwise.
 
 - The standard floating-point format. If floating point values are supported by the implementation, this format *must* be supported:
-  
-  - This is the standard integer format, followed immediately by 46 `.` and then another contiguous sequence of the 10 ASCII decimal digits, such as `0.0` (this does not cover, say, `0.` or `.0`).
+	- This is the standard integer format, followed immediately by 46 `.` and then another contiguous sequence of the 10 ASCII decimal digits, such as `0.0` (this does not cover, say, `0.` or `.0`).
 
-* The floating point constants, which *should* be supported (Note, though: these parse on Guile but not S9FES, and Datum only parses the negative constants correctly without an `#i` prefix. `#i` itself works on Guile and S9FES.):
-	* `+inf.0` or any case variation: Positive infinity.
-	* `-inf.0` or any case variation: Negative infinity.
-	* `+nan.0` or any case variation: Positive NaN.
+* The floating point constants, which *should* be supported (Note, though: these parse on Guile but not S9FES, and without the `#i` prefix, Datum only parses the negative constants correctly. `#i` itself works on Guile and S9FES.):
+	* `+inf.0`: Positive infinity.
+	* `-inf.0`: Negative infinity.
+	* `+nan.0`: Positive NaN.
 
 - The standard floating-point scientific notation format. This format *should* be supported:
 	- This is the standard integer or floating-point format, followed immediately by 101 `e` or 69 `E`, followed by the standard integer format *again.*
 	- *Unfortunately, most programming language standard libraries will use this format under some set of conditions, and they make it rather difficult to override.*
-		- It is possible to write a string processing function that fixes these, but doing so also goes somewhat against the minimal-implementation ideals of Datum.
+		- It is possible to write a function to fix these, but doing so also goes somewhat against the minimal-implementation ideals of Datum.
 			- In addition, `1e+308` is representable as a 64-bit floating-point number. The implication is that the results may be... amusing.
 	- This format *should never be written by humans.*
 
@@ -293,9 +228,7 @@ Secondly, things to consider:
 * Using 44 `,`  in a real floating-point or real integer number is *never* valid. This is to avoid the "10,000 => 10000 or 10.000" problem between different cultures. Just don't. Do not do it.
 	* Using it as part of a special kind of number not *expected* to be generally readable (Numeric vectors, complex numbers, possibly rational numbers but those would do better to use `/`) is theoretically fine, though an implementation should give some idea of the format of what such a number is, and the implementer may still wish to consider using alternative methods of expressing the number, *as the resulting format will be highly implementation-specific.*
 
-In addition, it is *generally advised* (given the repository this is in) that whatever number format is used for writing follows the JSON specification, and can be parsed by Java `Long.parseLong` or `Double.parseDouble`; further, that the reader can handle the values that come from those functions, such as hexadecimal (`0x100` = `256`) and scientific notation, *but these formats shouldn't be machine-written as an R6RS parser (or Guile, even!) cannot handle it.*
-
-*A particular exception to this arises with infinities and NaNs.* These need to go into special identifier territory, because the Scheme syntax for them is a massive pile of special cases that overextends way too far into symbol territory. Luckily, R6RS introduces syntax for these, and the inexact-prefix version works nicely.
+In addition, it is *generally advised* (given the repository this is in) that whatever number format is generally (not counting infinities/NaNs) used for writing follows the JSON specification, and can be parsed by Java `Long.parseLong` or `Double.parseDouble`; further, that the reader can handle the values that come from those functions.
 
 *Also, to be absolutely clear: only the 'standard formats' described above, along with the special identifiers, are safe to use for writing; use of a custom number format makes the file not purely Datum standard, and a compliant parser may not parse the result correctly.*
 
