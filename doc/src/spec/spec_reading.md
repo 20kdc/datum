@@ -23,7 +23,7 @@ The following kinds of values exist:
 * Doubles are 64-bit floating-point numbers. (Some implementations may not differentiate between integers and doubles, so automatic coercion is advised.)
 * Booleans are true (`#t`) or false (`#f`) values.
 * Lists contain other values.
-* Null (`#nil`) is a null value. Implementations MUST NOT alias null to the empty list.
+* Null (`#nil`) is a null value.
 
 Implementations can have more specific limits on numbers, appropriate to their environment of use. Implementations are allowed to reject any file according to resource limits.
 
