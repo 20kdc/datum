@@ -56,23 +56,22 @@ public class DatumWriter extends DatumEncodingVisitor {
         queued = SpacingState.None;
     }
 
-    private void putStringContent(String content, char delimiter) {
-        for (char c : content.toCharArray()) {
-            if (c == delimiter) {
-                putChar('\\');
-                putChar(c);
-            } else if (c == '\r') {
-                putChar('\\');
-                putChar('r');
-            } else if (c == '\n') {
-                putChar('\\');
-                putChar('n');
-            } else if (c == '\t') {
-                putChar('\\');
-                putChar('t');
-            } else {
-                putChar(c);
-            }
+    private void putUnprintableEscape(char c) {
+        if (c == '\r') {
+            putChar('\\');
+            putChar('r');
+        } else if (c == '\n') {
+            putChar('\\');
+            putChar('n');
+        } else if (c == '\t') {
+            putChar('\\');
+            putChar('t');
+        } else {
+            putChar('\\');
+            putChar('x');
+            for (char c2 : Integer.toHexString((int) c).toCharArray())
+                putChar(c2);
+            putChar(';');
         }
     }
 
@@ -108,9 +107,29 @@ public class DatumWriter extends DatumEncodingVisitor {
     public void visitString(String s, DatumSrcLoc srcLoc) {
         emitQueued(false);
         putChar('"');
-        putStringContent(s, '"');
+        for (char c : s.toCharArray()) {
+            if (c == '"') {
+                putChar('\\');
+                putChar(c);
+            } else if (c < 32 || c == 127) {
+                putUnprintableEscape(c);
+            } else {
+                putChar(c);
+            }
+        }
         putChar('"');
         queued = SpacingState.AfterToken;
+    }
+
+    private void putPIDChar(char c) {
+        if (c < 32 || c == 127) {
+            putUnprintableEscape(c);
+        } else {
+            DatumCharClass cc = DatumCharClass.identify(c);
+            if (!cc.isValidPID)
+                putChar('\\');
+            putChar(c);
+        }
     }
 
     @Override
@@ -122,23 +141,25 @@ public class DatumWriter extends DatumEncodingVisitor {
             putChar('{');
             putChar('}');
             putChar('#');
-            queued = SpacingState.AfterToken;
-            return;
-        }
-        boolean isFirst = true;
-        for (char c : s.toCharArray()) {
-            // only content-class can be in first character of a regular ID
-            DatumCharClass cc = DatumCharClass.identify(c);
-            boolean escape = false;
-            if (isFirst) {
-                escape = cc != DatumCharClass.Content;
-            } else {
-                escape = !cc.isValidPID;
-            } 
-            if (escape)
-                putChar('\\');
-            putChar(c);
-            isFirst = false;
+        } else {
+            boolean isFirst = true;
+            for (char c : s.toCharArray()) {
+                if (isFirst) {
+                    if (DatumCharClass.identify(c) != DatumCharClass.Content) {
+                        if (c < 32 || c == 127) {
+                            putUnprintableEscape(c);
+                        } else {
+                            putChar('\\');
+                            putChar(c);
+                        }
+                    } else {
+                        putChar(c);
+                    }
+                    isFirst = false;
+                } else {
+                    putPIDChar(c);
+                }
+            }
         }
         queued = SpacingState.AfterToken;
     }
@@ -146,22 +167,23 @@ public class DatumWriter extends DatumEncodingVisitor {
     @Override
     public void visitNumericUnknown(String s, DatumSrcLoc srcLoc) {
         emitQueued(false);
-        if (s.length() == 0 || s.equals("-") || (DatumCharClass.identify(s.charAt(0)) != DatumCharClass.NumericStart)) {
+        if (s.length() == 0) {
             putChar('#');
             putChar('i');
-            for (char c : s.toCharArray()) {
-                DatumCharClass cc = DatumCharClass.identify(c);
-                if (!cc.isValidPID)
-                    putChar('\\');
-                putChar(c);
+        } else if (s.length() == 1) {
+            char c = s.charAt(0);
+            if (DatumCharClass.identify(c) != DatumCharClass.Digit) {
+                putChar('#');
+                putChar('i');
             }
+            putChar(c);
         } else {
-            for (char c : s.toCharArray()) {
-                DatumCharClass cc = DatumCharClass.identify(c);
-                if (!cc.isValidPID)
-                    putChar('\\');
-                putChar(c);
+            if (!DatumCharClass.identify(s.charAt(0)).isNumericStart) {
+                putChar('#');
+                putChar('i');
             }
+            for (char c : s.toCharArray())
+                putPIDChar(c);
         }
         queued = SpacingState.AfterToken;
     }
@@ -171,10 +193,14 @@ public class DatumWriter extends DatumEncodingVisitor {
         emitQueued(false);
         putChar('#');
         for (char c : s.toCharArray()) {
-            DatumCharClass cc = DatumCharClass.identify(c);
-            if (!cc.isValidPID)
-                putChar('\\');
-            putChar(c);
+            if (c < 32) {
+                putUnprintableEscape(c);
+            } else {
+                DatumCharClass cc = DatumCharClass.identify(c);
+                if (!cc.isValidPID)
+                    putChar('\\');
+                putChar(c);
+            }
         }
         queued = SpacingState.AfterToken;
     }

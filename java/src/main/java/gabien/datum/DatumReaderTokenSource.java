@@ -139,11 +139,13 @@ public class DatumReaderTokenSource extends DatumTokenSource {
             tokenContents = sb.toString();
             return true;
         } else {
-            boolean numeric = lastCharClass == DatumCharClass.NumericStart;
+            boolean digit = lastCharClass == DatumCharClass.Digit;
+            boolean sign = lastCharClass == DatumCharClass.Sign;
             boolean specialID = lastCharClass == DatumCharClass.SpecialID;
             StringBuilder sb = new StringBuilder();
             // ensure initial character exists!
-            sb.append(decChar);
+            if (!specialID)
+                sb.append(decChar);
             while (true) {
                 int dec = decodeNextChar();
                 if (dec == -1)
@@ -157,12 +159,14 @@ public class DatumReaderTokenSource extends DatumTokenSource {
                 sb.append(decChar);
             }
             tokenContents = sb.toString();
-            tokenType = DatumTokenType.ID;
-            if (numeric && !tokenContents.equals("-"))
+            if (digit) {
                 tokenType = DatumTokenType.Numeric;
-            if (specialID) {
+            } else if (sign && tokenContents.length() != 1) {
+                tokenType = DatumTokenType.Numeric;
+            } else if (specialID) {
                 tokenType = DatumTokenType.SpecialID;
-                tokenContents = tokenContents.substring(1);
+            } else {
+                tokenType = DatumTokenType.ID;
             }
             return true;
         }

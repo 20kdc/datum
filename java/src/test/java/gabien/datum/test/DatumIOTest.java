@@ -35,6 +35,7 @@ public class DatumIOTest {
                     Arrays.asList(sym("tawa"), sym("mi")),
                     true, false, sym(""), sym("#escapethis"), sym("1234"), null,
                     (long) 256, (long) 256,
+                    "\u0000\u0010",
                     0.125d, "Hello\r\n\t\u5000\ud800\udc00", Arrays.asList(sym("quote"), sym("hi")),
                     0.125d
                 );
@@ -112,6 +113,7 @@ public class DatumIOTest {
                 "; Exceptional cases\n" +
                 "#t #f #{}# \\#escapethis \\1234 #nil\n" +
                 "#x100 #X100\n" +
+                "\"\\x0;\\x10;\"\n" +
                 "; Floats, strings\n" +
                 "0.125 \"Hello\\r\\n\\t\\x5000;\\x10000;\" (quote hi)\n" +
                 "#i0.125\n" +
@@ -137,7 +139,7 @@ public class DatumIOTest {
         StringWriter sw = new StringWriter();
         DatumWriter dw = new DatumWriter(sw);
         dw.visitTree(input, DatumSrcLoc.NONE);
-        assertEquals("((moku sina) li (pona) (tawa mi) #t #f #{}# \\#escapethis \\1234 #nil 256 256 0.125 \"Hello\\r\\n\\t\u5000\ud800\udc00\" (quote hi) 0.125)", sw.toString());
+        assertEquals("((moku sina) li (pona) (tawa mi) #t #f #{}# \\#escapethis \\1234 #nil 256 256 \"\\x0;\\x10;\" 0.125 \"Hello\\r\\n\\t\u5000\ud800\udc00\" (quote hi) 0.125)", sw.toString());
     }
 
 }

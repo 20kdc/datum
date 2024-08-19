@@ -31,13 +31,9 @@ For similar reasons, if null bytes are encountered, they may be parsed incorrect
 The following kinds of values exist:
 
 1. Symbols are arbitrary lists of characters (even empty lists).
-
 2. Strings are arbitrary lists of characters (even empty lists).
-
-3. The range and format of valid numbers is implementation-defined, with specific notes. What you're allowed to do here is restrained by Potential Identifier Differentiation, but the specific notes cover doubles and 64-bit integers.
-
-4. The valid Special Identifiers and their meanings are implementation-defined, with specific notes. What you're allowed to do here is restrained by Potential Identifier Differentiation, but the specific notes cover 64-bit integers.
-
+3. The range and format of valid numbers is implementation-defined, but with some basic requirements. In specific, doubles and 64-bit integers are covered.
+4. The valid Special Identifiers and their meanings are implementation-defined. What you're allowed to do here is restrained by Potential Identifier Differentiation.
 5. Lists can have any number of, or no, elements.
 
 ## Encoding
@@ -53,11 +49,8 @@ The backslash, 92 `\`, begins an escape sequence.
 The backslash may be followed by any character, in which case the result is that character, but made indirect. However, these specific characters have special meanings:
 
 * 117 `x`: Can be followed by however many hexadecimal digits, of any case, terminated by a semicolon 59 `;`, which indicate a Unicode codepoint to be written indirectly into the character stream.
-
 * 110 `n`: Newline, or 10, written indirectly.
-
 * 114 `r`: Carriage return, or 13, written indirectly.
-
 * 116 `t`: Tab, or 9, written indirectly.
 
 This provides the fundamental escaping logic for the rest of Datum.
@@ -65,8 +58,9 @@ This provides the fundamental escaping logic for the rest of Datum.
 While these don't have any meaningful effect on the specification, there are two things worth noting:
 
 1. It is impossible for the backslash to be written as a direct character under this system.
-
 2. As UTF-8-extended bytes (128-255), UTF-16 surrogate pairs, and high codepoints (128+) are _always_ content-class, the direct and indirect distinction effectively does not apply to them. This is on purpose and is the only way the specification can remain interoperable with respect to implementations that do and do not respect UTF-8. In particular, `\` followed by a multi-byte-sequence creates a difference in handling of the direct flag, but as the results are always content-class, it does not actually matter.
+
+**Whenever a writer is escaping a value from 0 to 31 inclusive, or 127 (but this is explicitly _not_ required or encouraged for 32!), the writer must use either the `x` escape or the appropriate `n`/`r`/`t` escape. It doesn't matter which as long as it produces the right result, but the writer must not use the pure 'backslash escape', as it can be very brittle in these situations.**
 
 ## Character Classes
 
@@ -75,33 +69,21 @@ There are a number of character classes defined here, defined in terms of charac
 All characters within a class act behaviourally identical to each other as far as later stages are concerned.
 
 - The characters from 0 through 32 inclusive, along with 127, but *not* 10, are *whitespace-class*.
-
 - 10 is *newline-class*.
-
 - 59 `;` is *line-comment-class*.
-
 - 34 `"` is *string-class*.
-
 - 40 `(` is *list-start-class*.
-
 - 41 `)` is *list-end-class*.
-
 - 41 `#` is *special-identifier-class*.
-
 - 45 `-` is *sign-class*.
-
 - 48 `0` through 57 `9` inclusive is *digit-class*.
-
 - All other characters, *including all characters (UTF-8, UTF-16, Unicode, or otherwise) above 127,* are *content-class*.
 
 There are also the following groups of classes, the contents of which may be differentiated by their actual class later:
 
 - The union of *content-class*, *sign-class*, *digit-class*, and *special-identifier-class* make up the *potential-identifier-group*.
-
 - The union of *sign-class* and *digit-class* make up the *numeric-start-group*.
-
 - The union of *whitespace-class* and *newline-class* make up the *non-printing-group*.
-
 - The union of *list-start-class* and *list-end-class* make up the *alone-group*.
 
 These groups only exist for ease of specification writing and their existence does not modify the character class process.
@@ -113,7 +95,6 @@ These groups only exist for ease of specification writing and their existence do
 First, we must define *whitespace*. Whitespace is one of two sequences outside of a string:
 
 1. Any *non-printing-group* character.
-
 2. A *line-comment-class* character followed by an arbitrary sequence of characters ending with a *newline-class* character, which is considered included in the sequence.
 
 Before reading a token, any whitespace is consumed.
@@ -124,13 +105,9 @@ There are a few kinds of token at this stage:
 
 * *Symbol tokens,* a *content-class* character followed by an arbitrary number of *potential-identifier-group* characters, *or* a token that solely consists of a single character of *numeric-sign-class*. Examples: `-`, `hello`, `symbol->string`.
 	* The `-` token is a special case of Numeric token parsing and is theoretically handled after parsing of a Numeric token completes.
-
 * *Numeric tokens,* a *numeric-start-group* character followed by an arbitrary number of *potential-identifier-group* characters, *unless* the token would solely consist of a single *sign-class* character (see *Symbol tokens*). Examples: `12.3`, `-8`.
-
 * *Special Identifier tokens,* a *special-identifier-class* character followed by an arbitrary number of *potential-identifier-group* characters. Example: `#t`.
-
 * *String tokens,* *string-class*-delimited sequences of completely arbitrary characters. The only restriction is that in order to write characters 34 `"` or 92 `\`, they must be escaped.
-
 * Characters of the *alone-group* turn into specific token types for each of the group's classes:
 	* *list-start-class* characters become *List Start tokens.*
 	* *list-end-class* characters become *List End tokens.*
@@ -249,9 +226,8 @@ Most tokens are simply literal values of their respective kinds. The only except
 An implementation may (but does not have to) make the following requirements, and all documents in the format must follow these to be valid:
 
 1. That the input stream is valid UTF-8.
-
 2. That all `\u`-escaped codepoints are those allowed to be used in UTF-8 (i.e. in the range `U+000000`-`U+10FFFF` inclusive and are not UTF-16 surrogate pairs)
-
 3. That all strings and potential identifiers are valid UTF-8. (The first two points together guarantee this.)
+4. Writers may produce incorrect output if given invalid streams, such as unmatched surrogate pairs or broken UTF-8.
 
-An implementation may also require a lack of null (0) characters at any point, but the document is still valid in this case. This requirement upsets the ability to represent partially-ASCII byte streams as Unicode codepoints 0 through 255, but implementations in languages that would concern themselves with null bytes do not have UTF-8 decoding as a certainty in a minimalist implementation, and therefore it is up to the implementer to determine the appropriate path. *This is worth noting especially because this affects file formats layered onto Datum.*
+An implementation may also require a lack of null (0) characters, even escaped, at any point. _The document is still valid in this case, but it is accepted it will not necessarily be readable for all readers._ This requirement upsets the ability to represent partially-ASCII byte streams as Unicode codepoints 0 through 255, but implementations in languages that would concern themselves with null bytes do not have UTF-8 decoding as a certainty in a minimalist implementation, and therefore it is up to the implementer to determine the appropriate path. *This is worth noting especially because this affects file formats layered onto Datum.*

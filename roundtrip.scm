@@ -20,3 +20,4 @@ hello
 (quote hello)
 "mi moku telo tan luka sina"
 escape\ me
+"\x7f;\x00;\x10;"

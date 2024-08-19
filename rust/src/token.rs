@@ -10,7 +10,7 @@ use core::{fmt::{Display, Write}, ops::Deref};
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 
-use crate::{DatumPushable, DatumTokenizer, DatumChar, DatumCharClass, DatumTokenType, DatumPipe, DatumTokenizerAction};
+use crate::{DatumChar, DatumCharClass, DatumCharEmit, DatumPipe, DatumPushable, DatumTokenType, DatumTokenizer, DatumTokenizerAction};
 
 /// Datum token with integrated string.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -103,6 +103,10 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                     } else if v == '\t' {
                         f.write_char('\\')?;
                         f.write_char('t')?;
+                    } else if ('\x00'..='\x1F').contains(&v) || v == '\x7F' {
+                        for c in DatumCharEmit::make_byte_hex_escape(v as u8) {
+                            f.write_char(c)?;
+                        }
                     } else {
                         f.write_char(v)?;
                     }

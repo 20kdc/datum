@@ -91,10 +91,79 @@ pub struct DatumChar {
     /// The raw value of this character.
     char: char,
     /// The class of this character.
-    class: DatumCharClass,
-    /// How to emit this class/char pair reliably.
-    emit_len: u8,
-    emit_storage: [char;2]
+    class: DatumCharClass
+}
+
+/// How to emit a class/char pair reliably.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct DatumCharEmit(u8, [char;5]);
+
+impl Deref for DatumCharEmit {
+    type Target = [char];
+    fn deref(&self) -> &Self::Target {
+        &self.1[..(self.0 as usize)]
+    }
+}
+
+impl From<DatumChar> for DatumCharEmit {
+    fn from(value: DatumChar) -> Self {
+        let v = value.char;
+        if value.class == DatumCharClass::Content {
+            if v == '\n' {
+                Self(2, ['\\', 'n', '\x00', '\x00', '\x00'])
+            } else if v == '\r' {
+                Self(2, ['\\', 'r', '\x00', '\x00', '\x00'])
+            } else if v == '\t' {
+                Self(2, ['\\', 't', '\x00', '\x00', '\x00'])
+            } else if ((v as u32) < 32) || v == '\x1F' {
+                Self(5, Self::make_byte_hex_escape(v as u8))
+            } else {
+                match DatumCharClass::identify(v) {
+                    Some(DatumCharClass::Content) => Self(1, [v, '\x00', '\x00', '\x00', '\x00']),
+                    _ => Self(2, ['\\', v, '\x00', '\x00', '\x00'])
+                }
+            }
+        } else {
+            // if the char was identified as this type it's self-identifying
+            Self(1, [v, '\x00', '\x00', '\x00', '\x00'])
+        }
+    }
+}
+
+impl DatumCharEmit {
+    const fn make_hex_digit(v: u8) -> char {
+        if v >= 0xA {
+            (('a' as u8) + (v - 0xA)) as char
+        } else {
+            (('0' as u8) + v) as char
+        }
+    }
+
+    /// Creates a hex escape for a byte.
+    pub const fn make_byte_hex_escape(v: u8) -> [char; 5] {
+        ['\\', 'x', Self::make_hex_digit(v >> 4), Self::make_hex_digit(v & 0xF), ';']
+    }
+
+    /// Write the necessary UTF-8 characters that will be read back as the source [DatumChar].
+    pub fn write(&self, f: &mut dyn Write) -> core::fmt::Result {
+        if self.0 >= 1 {
+            f.write_char(self.1[0])?;
+        }
+        if self.0 >= 2 {
+            f.write_char(self.1[1])?;
+        }
+        if self.0 >= 3 {
+            f.write_char(self.1[2])?;
+        }
+        if self.0 >= 4 {
+            f.write_char(self.1[3])?;
+        }
+        if self.0 >= 5 {
+            f.write_char(self.1[4])?;
+        }
+        // never exceeds this, so avoid unnecessary bounds-checking
+        core::fmt::Result::Ok(())
+    }
 }
 
 impl DatumChar {
@@ -124,23 +193,16 @@ impl DatumChar {
     /// ```
     /// use datum_rs::{DatumChar, DatumCharClass};
     /// let content_open_paren = DatumChar::content('(');
-    /// assert_eq!(content_open_paren.emit(), ['\\', '(']);
+    /// assert_eq!(*content_open_paren.emit(), ['\\', '(']);
     /// ```
     #[inline]
-    pub fn emit(&self) -> &[char] {
-        &self.emit_storage[0..self.emit_len as usize]
+    pub fn emit(&self) -> DatumCharEmit {
+        DatumCharEmit::from(*self)
     }
 
     /// Write the necessary UTF-8 characters that will be read back as this [DatumChar].
     pub fn write(&self, f: &mut dyn Write) -> core::fmt::Result {
-        if self.emit_len >= 1 {
-            f.write_char(self.emit_storage[0])?;
-        }
-        if self.emit_len >= 2 {
-            f.write_char(self.emit_storage[1])?;
-        }
-        // never exceeds this, so avoid unnecessary bounds-checking
-        core::fmt::Result::Ok(())
+        self.emit().write(f)
     }
 
     /// Identifies an unescaped character and returns the corresponding [DatumChar].
@@ -154,25 +216,13 @@ impl DatumChar {
     pub const fn identify(v: char) -> Option<DatumChar> {
         match DatumCharClass::identify(v) {
             None => None,
-            Some(class) => Some(DatumChar { char: v, class, emit_len: 1, emit_storage: [v, '\x00'] })
+            Some(class) => Some(DatumChar { char: v, class })
         }
     }
 
     /// Creates a content character for the given value.
     pub const fn content(v: char) -> DatumChar {
-        let emit: (u8, [char; 2]) = if v == '\n' {
-            (2, ['\\', 'n'])
-        } else if v == '\r' {
-            (2, ['\\', 'r'])
-        } else if v == '\t' {
-            (2, ['\\', 't'])
-        } else {
-            match DatumCharClass::identify(v) {
-                Some(DatumCharClass::Content) => (1, [v, '\x00']),
-                _ => (2, ['\\', v])
-            }
-        };
-        DatumChar { char: v, class: DatumCharClass::Content, emit_len: emit.0, emit_storage: emit.1 }
+        DatumChar { char: v, class: DatumCharClass::Content }
     }
 
     /// Creates a potential identifier character for the given value.
@@ -204,6 +254,6 @@ impl Deref for DatumChar {
 impl Default for DatumChar {
     fn default() -> Self {
         // Whitespace ' ' should avoid messing up whatever somehow receives this value.
-        DatumChar { char: ' ', class: DatumCharClass::Whitespace, emit_len: 1, emit_storage: [' ', '\x00'] }
+        DatumChar { char: ' ', class: DatumCharClass::Whitespace }
     }
 }
