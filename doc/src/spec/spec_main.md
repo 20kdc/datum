@@ -1,4 +1,4 @@
-# Reader's Specification
+# The Specification
 
 Datum is a data exchange format meant for quick implementation in various languages. It's designed to be written primarily by humans.
 

@@ -1,5 +1,5 @@
 /*
- * gabien-datum-rs - Quick to implement S-expression format
+ * datum-rs - Quick to implement S-expression format
  * Written starting in 2024 by contributors (see CREDITS.txt at repository's root)
  * To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
@@ -36,7 +36,7 @@ use core::fmt::Debug;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::{DatumAtom, DatumPipe, DatumToken, DatumTokenType, DatumWriter};
+use crate::{datum_error, DatumAtom, DatumPipe, DatumResult, DatumError, DatumErrorKind, DatumToken, DatumTokenType, DatumWriter};
 
 /// Datum AST node / value.
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
@@ -79,53 +79,52 @@ pub const DATUM_PARSER_MAX_SIZE: usize = 1;
 #[derive(Clone, Debug, Default)]
 pub struct DatumParser {
     stack: Vec<Vec<DatumValue>>,
-    error: bool
 }
 
 impl DatumPipe for DatumParser {
     type Input = DatumToken<String>;
     type Output = DatumValue;
 
-    fn feed<F: FnMut(DatumValue)>(&mut self, token: Self::Input, f: &mut F) {
+    fn feed<F: FnMut(DatumValue) -> DatumResult<()>>(&mut self, token: Self::Input, f: &mut F) -> DatumResult<()> {
         match token.token_type() {
             DatumTokenType::ListStart => {
                 let list = Vec::new();
                 self.stack.push(list);
+                Ok(())
             },
             DatumTokenType::ListEnd => {
                 let res = self.stack.pop();
                 if let Some(v) = res {
                     self.feed_value(DatumValue::List(v), f)
                 } else {
-                    self.error = true;
+                    Err(datum_error!(BadData, "end of list while not in list"))
                 }
             },
             _ => match DatumAtom::try_from(token) {
-                Err(_) => {
-                    self.error = true;
-                },
+                Err(e) => Err(e),
                 Ok(v) => self.feed_value(DatumValue::Atom(v), f),
             }
         }
     }
 
     /// Sets the error flag if the parser is in the middle of a value.
-    fn eof<F: FnMut(DatumValue)>(&mut self, _f: &mut F) {
-        self.error |= !self.stack.is_empty();
-    }
-
-    fn has_error(&self) -> bool {
-        self.error
+    fn eof<F: FnMut(DatumValue) -> DatumResult<()>>(&mut self, _f: &mut F) -> DatumResult<()> {
+        if !self.stack.is_empty() {
+            Err(datum_error!(Interrupted, "eof inside list"))
+        } else {
+            Ok(())
+        }
     }
 }
 
 impl DatumParser {
-    fn feed_value<F: FnMut(DatumValue)>(&mut self, v: DatumValue, f: &mut F) {
+    fn feed_value<F: FnMut(DatumValue) -> DatumResult<()>>(&mut self, v: DatumValue, f: &mut F) -> DatumResult<()> {
         match self.stack.pop() {
             None => f(v),
             Some(mut list) => {
                 list.push(v);
                 self.stack.push(list);
+                Ok(())
             }
         }
     }

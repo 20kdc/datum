@@ -1,12 +1,12 @@
-# Datum: 'LISP-like' format meant for quick implementation in various languages
+# Datum: Terse, human-writable data format
 
-_EVERYTHING BELOW HERE IS TEMPORARY DURING THE MIGRATION OUT OF `gabien-common`. Working code, and two cross-compatible implementations, exist, but there are some final changes that need to be done to the specification, and the whole project needs to be 'professionalized' before I'm willing to give it a stable version number._
+**Under construction!**
 
-***
+_It feels to me that 'Release early, release often' would be a fatal blow in certain languages (Rust), so expect work on this to continue in the coming weeks._
 
-Datum is an S-expression format meant for quick implementation in various languages.
+Datum is a terse, human-writable data format meant for quick implementation in various languages.
 
-It has a specification, available at [./doc/spec](./doc/spec).
+It has a specification, available at [./doc/src/spec](./doc/src/spec).
 
 It was originally developed for use in some of my Java programs for the purpose of fulfilling the role of 'terse data language,' with some key distinctions:
 
@@ -16,23 +16,10 @@ It was originally developed for use in some of my Java programs for the purpose 
 
 It's intended to be reasonably readable by R6RS readers, but not a strict subset. (However, it has been used in a Java project to implement a "Javaified" Scheme dialect.)
 
-`datum-rs` is a library for reading and writing Datum values in Rust.
+Implementations exist for:
 
-In order to allow use in diverse environments, it attempts to follow some key rules:
-
-* `#![no_std]`
-* `#![forbid(unsafe_code)]`
-* completely public-domain
-* no external dependencies, but without trying to reinvent the wheel _too_ hard
-
-## TODO
-
-* Serde integration! That makes everything more popular! But need to standardize a mapping
-* Example program (a toy LISP perhaps?)
-* Shore up all the documentation
-* Figure out how to make doctests that rely on alloc while not being for alloc functions
-* If Datum is going to be a serious project I should probably move it out of the `gabien-common` umbrella. But also, that's probably going to mean the Java implementation has to be either left behind or things are going to get a little ugly. Basically, mass reorganization incoming.
-* Java version: set Maven description properly
+* Java (*not yet stabilized*)
+* Rust (*not yet stabilized*)
 
 ## License
 

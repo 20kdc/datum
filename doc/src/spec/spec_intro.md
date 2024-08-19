@@ -1,4 +1,4 @@
-# Specification
+# Specification Intro
 
 The Datum specification is divided into two key sections and a number of appendixes.
 

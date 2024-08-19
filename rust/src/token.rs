@@ -1,19 +1,20 @@
 /*
- * gabien-datum-rs - Quick to implement S-expression format
+ * datum-rs - Quick to implement S-expression format
  * Written starting in 2024 by contributors (see CREDITS.txt at repository's root)
  * To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use core::{fmt::{Display, Write}, ops::Deref};
+use core::{convert::TryFrom, fmt::{Display, Write}, ops::Deref};
 
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 
-use crate::{DatumChar, DatumCharClass, DatumCharEmit, DatumPipe, DatumPushable, DatumTokenType, DatumTokenizer, DatumTokenizerAction};
+use crate::{datum_error, DatumChar, DatumCharClass, DatumCharEmit, DatumError, DatumErrorKind, DatumPipe, DatumPushable, DatumResult, DatumTokenType, DatumTokenizer, DatumTokenizerAction};
 
 /// Datum token with integrated string.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// Notably, integer/float are stored as their values here to prevent unwritable values existing.
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum DatumToken<B: Deref<Target = str>> {
     /// String. Buffer contents are the unescaped string contents.
     String(B),
@@ -21,8 +22,10 @@ pub enum DatumToken<B: Deref<Target = str>> {
     ID(B),
     /// Special ID. Buffer contents are the symbol (text after, but not including, '#').
     SpecialID(B),
-    /// Numeric. Buffer contents are simply the token.
-    Numeric(B),
+    /// Integer.
+    Integer(i64),
+    /// Float.
+    Float(f64),
     ListStart,
     ListEnd
 }
@@ -35,31 +38,32 @@ impl<B: Deref<Target = str>> Default for DatumToken<B> {
     }
 }
 
-impl<B: Deref<Target = str>> DatumToken<B> {
-    /// Creates a DatumToken using a String or something that can be converted into it (such as [&str]).
-    /// It is possible to serialize anything you pass here into a token that can be read back, except that the three alone-group characters do not have buffers (so these will be lost).
-    pub fn new<T: Into<B>>(tt: DatumTokenType, text: T) -> Self {
-        match tt {
-            DatumTokenType::String => Self::String(text.into()),
-            DatumTokenType::ID => Self::ID(text.into()),
-            DatumTokenType::SpecialID => Self::SpecialID(text.into()),
-            DatumTokenType::Numeric => Self::Numeric(text.into()),
-            DatumTokenType::ListStart => Self::ListStart,
-            DatumTokenType::ListEnd => Self::ListEnd,
+impl<B: Deref<Target = str>> TryFrom<(DatumTokenType, B)> for DatumToken<B> {
+    type Error = DatumError;
+    fn try_from(value: (DatumTokenType, B)) -> Result<Self, Self::Error> {
+        match value {
+            (DatumTokenType::String, v) => Ok(DatumToken::String(v)),
+            (DatumTokenType::ID, v) => Ok(DatumToken::ID(v)),
+            (DatumTokenType::SpecialID, v) => Ok(DatumToken::SpecialID(v)),
+            (DatumTokenType::Numeric, v) => {
+                // Numbers are parsed here to ensure that all possible [DatumToken]s are writable.
+                // Originally, this was offloaded to DatumAtom, but this bloated the spec and caused all sorts of problems.
+                // Besides, the quicker we get rid of these things the saner the memory use is for people who use [char;16] etc...
+                if let Ok(v) = v.parse() {
+                    Ok(DatumToken::Integer(v))
+                } else if let Ok(v) = v.parse() {
+                    Ok(DatumToken::Float(v))
+                } else {
+                    Err(datum_error!(BadData, "bad numeric"))
+                }
+            },
+            (DatumTokenType::ListStart, _) => Ok(DatumToken::ListStart),
+            (DatumTokenType::ListEnd, _) => Ok(DatumToken::ListEnd),
         }
     }
-    /// Similar to [DatumToken::new] but doesn't perform .into (prevents type issues sometimes)
-    pub fn new_not_into(tt: DatumTokenType, text: B) -> Self {
-        match tt {
-            DatumTokenType::String => Self::String(text),
-            DatumTokenType::ID => Self::ID(text),
-            DatumTokenType::SpecialID => Self::SpecialID(text),
-            DatumTokenType::Numeric => Self::Numeric(text),
-            DatumTokenType::ListStart => Self::ListStart,
-            DatumTokenType::ListEnd => Self::ListEnd,
-        }
-    }
+}
 
+impl<B: Deref<Target = str>> DatumToken<B> {
     /// Return the token type of this token.
     #[cfg(not(tarpaulin_include))]
     pub fn token_type(&self) -> DatumTokenType {
@@ -67,7 +71,8 @@ impl<B: Deref<Target = str>> DatumToken<B> {
             Self::String(_) => DatumTokenType::String,
             Self::ID(_) => DatumTokenType::ID,
             Self::SpecialID(_) => DatumTokenType::SpecialID,
-            Self::Numeric(_) => DatumTokenType::Numeric,
+            Self::Integer(_) => DatumTokenType::Numeric,
+            Self::Float(_) => DatumTokenType::Numeric,
             Self::ListStart => DatumTokenType::ListStart,
             Self::ListEnd => DatumTokenType::ListEnd,
         }
@@ -80,7 +85,6 @@ impl<B: Deref<Target = str>> DatumToken<B> {
             Self::String(b) => Some(b),
             Self::ID(b) => Some(b),
             Self::SpecialID(b) => Some(b),
-            Self::Numeric(b) => Some(b),
             _ => None
         }
     }
@@ -151,57 +155,26 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                     DatumChar::potential_identifier(remainder).write(f)?;
                 }
             },
-            Self::Numeric(b) => {
-                let mut chars = b.chars();
-                match chars.next() {
-                    Some(v0) => {
-                        let v0dc = DatumChar::identify(v0);
-                        if let Some(v0dc) = v0dc {
-                            if v0dc.numeric_start() {
-                                match chars.next() {
-                                    Some(v1) => {
-                                        // success
-                                        v0dc.write(f)?;
-                                        DatumChar::potential_identifier(v1).write(f)?;
-                                        for remainder in chars {
-                                            DatumChar::potential_identifier(remainder).write(f)?;
-                                        }
-                                    },
-                                    None => {
-                                        if v0dc.class() == DatumCharClass::Sign {
-                                            // fallback as lone sign
-                                            f.write_char('#')?;
-                                            f.write_char('i')?;
-                                            f.write_char(v0dc.char())?;
-                                        } else {
-                                            // success as lone digit
-                                            f.write_char(v0dc.char())?;
-                                        }
-                                    }
-                                }
-                            } else {
-                                // fallback as start is not numeric
-                                f.write_char('#')?;
-                                f.write_char('i')?;
-                                DatumChar::potential_identifier(v0).write(f)?;
-                                for remainder in chars {
-                                    DatumChar::potential_identifier(remainder).write(f)?;
-                                }
-                            }
-                        } else {
-                            // fallback as start is backslash
-                            f.write_char('#')?;
-                            f.write_char('i')?;
-                            DatumChar::potential_identifier(v0).write(f)?;
-                            for remainder in chars {
-                                DatumChar::potential_identifier(remainder).write(f)?;
-                            }
-                        }
-                    },
-                    None => {
-                        // fallback as empty
-                        f.write_char('#')?;
-                        f.write_char('i')?;
+            Self::Integer(v) => {
+                core::fmt::write(f, format_args!("{}", v))?;
+            },
+            Self::Float(v) => {
+                if v.is_nan() {
+                    f.write_str("#i+nan.0")?;
+                } else if v.is_infinite() {
+                    if v.is_sign_positive() {
+                        f.write_str("#i+inf.0")?;
+                    } else {
+                        f.write_str("#i-inf.0")?;
+                    }
+                } else {
+                    // In my defense, it was this or relying on {:?} to be stable.
+                    // This is merely cursed. That is basically asking for version breakage.
+                    let mut res = DatumFloatObserver(f, false);
+                    core::fmt::write(&mut res, format_args!("{:?}", v))?;
+                    if !res.1 {
+                        // Nothing indicating this is a float, append .0
+                        f.write_str(".0")?;
                     }
                 }
             },
@@ -222,6 +195,21 @@ impl<B: Deref<Target = str>> Display for DatumToken<B> {
     }
 }
 
+/// Internal structure to determine if Rust didn't write any indicator this number is intended to be a float.
+struct DatumFloatObserver<'a>(&'a mut dyn Write, bool);
+
+impl Write for DatumFloatObserver<'_> {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        for c in s.bytes() {
+            if c == b'.' || c == b'e' || c == b'E' {
+                // Any of these three characters indicate Rust generated some kind of float.
+                self.1 = true;
+            }
+        }
+        self.0.write_str(s)
+    }
+}
+
 /// Tokenizer that uses String as an internal buffer and spits out DatumToken.
 /// ```
 /// use datum_rs::{DatumDecoder, DatumToken, DatumStringTokenizer, DatumComposePipe, DatumPipe};
@@ -230,7 +218,7 @@ impl<B: Deref<Target = str>> Display for DatumToken<B> {
 /// decoder.feed_iter_to_vec(&mut out, ("these become test symbols").chars(), true);
 /// ```
 #[derive(Clone, Default, Debug)]
-pub struct DatumPipeTokenizer<B: DatumPushable<char> + Deref<Target = str> + Default>(B, DatumTokenizer, bool);
+pub struct DatumPipeTokenizer<B: DatumPushable<char> + Deref<Target = str> + Default>(B, DatumTokenizer);
 
 #[cfg(feature = "alloc")]
 pub type DatumStringTokenizer = DatumPipeTokenizer<String>;
@@ -239,38 +227,26 @@ impl<B: DatumPushable<char> + Deref<Target = str> + Default> DatumPipe for Datum
     type Input = DatumChar;
     type Output = DatumToken<B>;
 
-    fn feed<F: FnMut(Self::Output)>(&mut self, i: Self::Input, f: &mut F) {
+    fn feed<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, i: Self::Input, f: &mut F) -> DatumResult<()> {
         let m0 = &mut self.0;
-        let m2 = &mut self.2;
         self.1.feed(i.class(), &mut |v| {
-            Self::transform_action(m0, m2, i.char(), v, f)
+            Self::transform_action(m0, i.char(), v, f)
         })
     }
 
-    fn eof<F: FnMut(Self::Output)>(&mut self, f: &mut F) {
+    fn eof<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, f: &mut F) -> DatumResult<()> {
         let m0 = &mut self.0;
-        let m2 = &mut self.2;
         self.1.eof(&mut |v| {
-            Self::transform_action(m0, m2, ' ', v, f)
+            Self::transform_action(m0, ' ', v, f)
         })
-    }
-
-    fn has_error(&self) -> bool {
-        self.1.has_error() || self.2
     }
 }
 
 impl<B: DatumPushable<char> + Deref<Target = str> + Default> DatumPipeTokenizer<B> {
-    fn transform_action<F: FnMut(DatumToken<B>)>(buffer: &mut B, error: &mut bool, char: char, action: DatumTokenizerAction, f: &mut F) {
+    fn transform_action<F: FnMut(DatumToken<B>) -> DatumResult<()>>(buffer: &mut B, char: char, action: DatumTokenizerAction, f: &mut F) -> DatumResult<()> {
         match action {
-            DatumTokenizerAction::Push => {
-                if buffer.push(char).is_err() {
-                    *error = true;
-                }
-            },
-            DatumTokenizerAction::Token(v) => {
-                f(DatumToken::new(v, core::mem::take(buffer)));
-            }
+            DatumTokenizerAction::Push => buffer.push(char),
+            DatumTokenizerAction::Token(v) => f(DatumToken::try_from((v, core::mem::take(buffer)))?)
         }
     }
 }

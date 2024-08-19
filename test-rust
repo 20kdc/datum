@@ -1,7 +1,11 @@
 #!/bin/sh
 set -e
+cd rust
 cargo test --no-default-features --no-run
 cargo test --no-default-features -F alloc --no-run
 cargo test
 cargo doc
 cargo tarpaulin
+cargo build --all-features
+cd ..
+mdbook test doc -L rust/target/debug/deps/
