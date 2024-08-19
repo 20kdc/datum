@@ -4,6 +4,6 @@ The Datum specification is divided into two key sections and a number of appendi
 
 The reader specification is the sole _required_ specification required, as it defines the format. This is the file being measured to determine the complexity of the format as opposed to other, similar formats.
 
-The writer specification defines additional requirements writers *should* follow when writing Datum.
+The implementor's notes defines additional requirements writers *should* follow when writing Datum, along with recommended design choices.
 
-Appendixes are solely to make it easier to understand the specification. Meanwhile, the body text is meant to be
+The appendixes are simply where things such diagrams and rational go. They are meant to be informative only.

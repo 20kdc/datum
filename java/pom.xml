@@ -9,7 +9,7 @@
 	<version>0.7-SNAPSHOT</version>
 
 	<name>gabien-datum</name>
-	<description>TODO CHANGE THIS DESCRIPTION</description>
+	<description>Datum is a human-friendly, machine-readable data exchange format meant for quick implementation in various languages.</description>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
