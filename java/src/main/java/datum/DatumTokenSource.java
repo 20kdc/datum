@@ -4,7 +4,7 @@
  * To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
-package gabien.datum;
+package datum;
 
 import java.util.Stack;
 
@@ -71,19 +71,22 @@ public abstract class DatumTokenSource {
                     visitor.visitId("", srcLoc());
                 } else if (c.equalsIgnoreCase("nil")) {
                     visitor.visitNull(srcLoc());
-                } else if (c.startsWith("i") || c.startsWith("I")) {
-                    visitNumeric(visitor, c.substring(1));
                 } else if (c.startsWith("x") || c.startsWith("X")) {
                     long l;
                     try {
                         l = Long.valueOf(c.substring(1), 16);
                     } catch (NumberFormatException nfe2) {
-                        visitor.visitNumericUnknown(c, srcLoc());
-                        break;
+                        throw new RuntimeException(position() + ": Invalid hex constant: " + c, nfe2);
                     }
-                    visitor.visitInt(l, c, srcLoc());
+                    visitor.visitInt(l, srcLoc());
+                } else if (c.equalsIgnoreCase("i+inf.0")) {
+                    visitor.visitFloat(Double.POSITIVE_INFINITY, srcLoc());
+                } else if (c.equalsIgnoreCase("i-inf.0")) {
+                    visitor.visitFloat(Double.NEGATIVE_INFINITY, srcLoc());
+                } else if (c.equalsIgnoreCase("i+nan.0")) {
+                    visitor.visitFloat(Double.NaN, srcLoc());
                 } else {
-                    visitor.visitSpecialUnknown(c, srcLoc());
+                    throw new RuntimeException(position() + ": Unknown special ID sequence: " + c);
                 }
             }
                 break;
@@ -114,16 +117,6 @@ public abstract class DatumTokenSource {
     }
 
     private final void visitNumeric(DatumVisitor visitor, String c) {
-        if (c.equalsIgnoreCase("+inf.0")) {
-            visitor.visitFloat(Double.POSITIVE_INFINITY, c, srcLoc());
-            return;
-        } else if (c.equalsIgnoreCase("-inf.0")) {
-            visitor.visitFloat(Double.NEGATIVE_INFINITY, c, srcLoc());
-            return;
-        } else if (c.equalsIgnoreCase("+nan.0")) {
-            visitor.visitFloat(Double.NaN, c, srcLoc());
-            return;
-        }
         // Conversion...
         long l = 0L;
         try {
@@ -133,13 +126,12 @@ public abstract class DatumTokenSource {
             try {
                 d = Double.valueOf(c);
             } catch (NumberFormatException nfe2) {
-                visitor.visitNumericUnknown(c, srcLoc());
-                return;
+                throw new RuntimeException(position() + ": Invalid number: " + c);
             }
-            visitor.visitFloat(d, c, srcLoc());
+            visitor.visitFloat(d, srcLoc());
             return;
         }
-        visitor.visitInt(l, c, srcLoc());
+        visitor.visitInt(l, srcLoc());
     }
 
     /**

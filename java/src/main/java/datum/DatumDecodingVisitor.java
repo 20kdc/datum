@@ -4,7 +4,7 @@
  * To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
-package gabien.datum;
+package datum;
 
 import java.util.LinkedList;
 
@@ -31,16 +31,6 @@ public abstract class DatumDecodingVisitor extends DatumVisitor {
     }
 
     @Override
-    public void visitNumericUnknown(String s, DatumSrcLoc srcLoc) {
-        throw new RuntimeException("Numeric can't be parsed: " + s);
-    }
-
-    @Override
-    public void visitSpecialUnknown(String s, DatumSrcLoc srcLoc) {
-        throw new RuntimeException("Special ID can't be parsed: " + s);
-    }
-
-    @Override
     public void visitBoolean(boolean value, DatumSrcLoc srcLoc) {
         visitTree(value, srcLoc);
     }
@@ -51,12 +41,12 @@ public abstract class DatumDecodingVisitor extends DatumVisitor {
     }
 
     @Override
-    public void visitInt(long value, String raw, DatumSrcLoc srcLoc) {
+    public void visitInt(long value, DatumSrcLoc srcLoc) {
         visitTree(value, srcLoc);
     }
 
     @Override
-    public void visitFloat(double value, String raw, DatumSrcLoc srcLoc) {
+    public void visitFloat(double value, DatumSrcLoc srcLoc) {
         visitTree(value, srcLoc);
     }
 

@@ -6,8 +6,8 @@
  */
 package gabien.datum.test;
 
+import static datum.DatumTreeUtils.*;
 import static org.junit.Assert.*;
-import static gabien.datum.DatumTreeUtils.*;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -16,11 +16,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Test;
 
-import gabien.datum.DatumReaderTokenSource;
-import gabien.datum.DatumRuntimeIOException;
-import gabien.datum.DatumSrcLoc;
-import gabien.datum.DatumDecodingVisitor;
-import gabien.datum.DatumWriter;
+import datum.DatumDecodingVisitor;
+import datum.DatumReaderTokenSource;
+import datum.DatumRuntimeIOException;
+import datum.DatumSrcLoc;
+import datum.DatumWriter;
 
 /**
  * Reader/writer test.
@@ -36,8 +36,7 @@ public class DatumIOTest {
                     true, false, sym(""), sym("#escapethis"), sym("1234"), null,
                     (long) 256, (long) 256,
                     "\u0000\u0010",
-                    0.125d, "Hello\r\n\t\u5000\ud800\udc00", Arrays.asList(sym("quote"), sym("hi")),
-                    0.125d
+                    0.125d, "Hello\r\n\t\u5000\ud800\udc00", Arrays.asList(sym("quote"), sym("hi"))
                 );
     }
     @Test
@@ -77,7 +76,7 @@ public class DatumIOTest {
         assertEquals("a\\ ", DatumWriter.objectToString(sym("a ")));
         assertEquals("#nil", DatumWriter.objectToString(null));
         assertEquals("#i+inf.0", DatumWriter.objectToString(Double.POSITIVE_INFINITY));
-        assertEquals("-inf.0", DatumWriter.objectToString(Double.NEGATIVE_INFINITY));
+        assertEquals("#i-inf.0", DatumWriter.objectToString(Double.NEGATIVE_INFINITY));
         assertEquals("#i+nan.0", DatumWriter.objectToString(Double.NaN));
         assertEquals("123", DatumWriter.objectToString(123));
         assertEquals("\"\\\"\"", DatumWriter.objectToString("\""));
@@ -116,7 +115,6 @@ public class DatumIOTest {
                 "\"\\x0;\\x10;\"\n" +
                 "; Floats, strings\n" +
                 "0.125 \"Hello\\r\\n\\t\\x5000;\\x10000;\" (quote hi)\n" +
-                "#i0.125\n" +
                 ")";
         DatumReaderTokenSource drs = new DatumReaderTokenSource("string", tcs);
         AtomicBoolean signalWasVisited = new AtomicBoolean();
@@ -139,7 +137,7 @@ public class DatumIOTest {
         StringWriter sw = new StringWriter();
         DatumWriter dw = new DatumWriter(sw);
         dw.visitTree(input, DatumSrcLoc.NONE);
-        assertEquals("((moku sina) li (pona) (tawa mi) #t #f #{}# \\#escapethis \\1234 #nil 256 256 \"\\x0;\\x10;\" 0.125 \"Hello\\r\\n\\t\u5000\ud800\udc00\" (quote hi) 0.125)", sw.toString());
+        assertEquals("((moku sina) li (pona) (tawa mi) #t #f #{}# \\#escapethis \\1234 #nil 256 256 \"\\x0;\\x10;\" 0.125 \"Hello\\r\\n\\t\u5000\ud800\udc00\" (quote hi))", sw.toString());
     }
 
 }

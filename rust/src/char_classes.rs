@@ -56,14 +56,15 @@ impl DatumCharClass {
     }
 
     /// Identifies a character.
-    /// Backslash is a 'meta-character' and doesn't count, returning [None].
+    /// Meta-class characters return [None].
     pub const fn identify(v: char) -> Option<Self> {
-        if v == '\\' {
-            None
-        } else if v == '\n' {
+        if v == '\n' {
             Some(DatumCharClass::Newline)
-        } else if v <= ' ' || v == '\x7F' {
+        } else if v == '\t' || v == ' ' {
+            // important that this comes before the meta-class check
             Some(DatumCharClass::Whitespace)
+        } else if v < ' ' || v == '\x7F' || v == '\\' {
+            None
         } else if v == ';' {
             Some(DatumCharClass::LineComment)
         } else if v == '"' {

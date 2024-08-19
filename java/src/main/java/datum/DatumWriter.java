@@ -4,7 +4,7 @@
  * To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
-package gabien.datum;
+package datum;
 
 import java.io.IOException;
 import java.io.StringWriter;
@@ -56,7 +56,7 @@ public class DatumWriter extends DatumEncodingVisitor {
         queued = SpacingState.None;
     }
 
-    private void putUnprintableEscape(char c) {
+    private void putEscape(char c) {
         if (c == '\r') {
             putChar('\\');
             putChar('r');
@@ -66,12 +66,15 @@ public class DatumWriter extends DatumEncodingVisitor {
         } else if (c == '\t') {
             putChar('\\');
             putChar('t');
-        } else {
+        } else if (c < 32 || c == 127 || c == 'r' || c == 'n' || c == 't' || c == 'x') {
             putChar('\\');
             putChar('x');
             for (char c2 : Integer.toHexString((int) c).toCharArray())
                 putChar(c2);
             putChar(';');
+        } else {
+            putChar('\\');
+            putChar(c);
         }
     }
 
@@ -108,11 +111,8 @@ public class DatumWriter extends DatumEncodingVisitor {
         emitQueued(false);
         putChar('"');
         for (char c : s.toCharArray()) {
-            if (c == '"') {
-                putChar('\\');
-                putChar(c);
-            } else if (c < 32 || c == 127) {
-                putUnprintableEscape(c);
+            if (c < 32 || c == 127 || c == '"') {
+                putEscape(c);
             } else {
                 putChar(c);
             }
@@ -122,12 +122,10 @@ public class DatumWriter extends DatumEncodingVisitor {
     }
 
     private void putPIDChar(char c) {
-        if (c < 32 || c == 127) {
-            putUnprintableEscape(c);
+        DatumCharClass cc = DatumCharClass.identify(c);
+        if (!cc.isValidPID) {
+            putEscape(c);
         } else {
-            DatumCharClass cc = DatumCharClass.identify(c);
-            if (!cc.isValidPID)
-                putChar('\\');
             putChar(c);
         }
     }
@@ -146,12 +144,7 @@ public class DatumWriter extends DatumEncodingVisitor {
             for (char c : s.toCharArray()) {
                 if (isFirst) {
                     if (DatumCharClass.identify(c) != DatumCharClass.Content) {
-                        if (c < 32 || c == 127) {
-                            putUnprintableEscape(c);
-                        } else {
-                            putChar('\\');
-                            putChar(c);
-                        }
+                        putEscape(c);
                     } else {
                         putChar(c);
                     }
@@ -165,64 +158,57 @@ public class DatumWriter extends DatumEncodingVisitor {
     }
 
     @Override
-    public void visitNumericUnknown(String s, DatumSrcLoc srcLoc) {
-        emitQueued(false);
-        if (s.length() == 0) {
-            putChar('#');
-            putChar('i');
-        } else if (s.length() == 1) {
-            char c = s.charAt(0);
-            if (DatumCharClass.identify(c) != DatumCharClass.Digit) {
-                putChar('#');
-                putChar('i');
-            }
-            putChar(c);
-        } else {
-            if (!DatumCharClass.identify(s.charAt(0)).isNumericStart) {
-                putChar('#');
-                putChar('i');
-            }
-            for (char c : s.toCharArray())
-                putPIDChar(c);
-        }
-        queued = SpacingState.AfterToken;
-    }
-
-    @Override
-    public void visitSpecialUnknown(String s, DatumSrcLoc srcLoc) {
+    public void visitBoolean(boolean value, DatumSrcLoc srcLoc) {
         emitQueued(false);
         putChar('#');
-        for (char c : s.toCharArray()) {
-            if (c < 32) {
-                putUnprintableEscape(c);
-            } else {
-                DatumCharClass cc = DatumCharClass.identify(c);
-                if (!cc.isValidPID)
-                    putChar('\\');
-                putChar(c);
-            }
-        }
+        putChar(value ? 't' : 'f');
         queued = SpacingState.AfterToken;
-    }
-
-    @Override
-    public void visitBoolean(boolean value, DatumSrcLoc srcLoc) {
-        visitSpecialUnknown(value ? "t" : "f", srcLoc);
     }
 
     @Override
     public void visitNull(DatumSrcLoc srcLoc) {
-        visitSpecialUnknown("nil", srcLoc);
+        emitQueued(false);
+        putChar('#');
+        putChar('n');
+        putChar('i');
+        putChar('l');
+        queued = SpacingState.AfterToken;
     }
 
     @Override
-    public void visitInt(long value, String raw, DatumSrcLoc srcLoc) {
-        visitNumericUnknown(raw, srcLoc);
+    public void visitInt(long value, DatumSrcLoc srcLoc) {
+        emitQueued(false);
+        for (char c : Long.toString(value).toCharArray())
+            putChar(c);
+        queued = SpacingState.AfterToken;
     }
 
     @Override
-    public void visitFloat(double value, String raw, DatumSrcLoc srcLoc) {
-        visitNumericUnknown(raw, srcLoc);
+    public void visitFloat(double value, DatumSrcLoc srcLoc) {
+        emitQueued(false);
+        if (!Double.isFinite(value)) {
+            putChar('#');
+            putChar('i');
+            if (Double.isInfinite(value)) {
+                putChar(value > 0 ? '+' : '-');
+                putChar('i');
+                putChar('n');
+                putChar('f');
+                putChar('.');
+                putChar('0');
+            } else {
+                putChar('+');
+                putChar('n');
+                putChar('a');
+                putChar('n');
+                putChar('.');
+                putChar('0');
+            }
+        } else {
+            for (char c : Double.toString(value).toCharArray())
+                putChar(c);
+        }
+        queued = SpacingState.AfterToken;
     }
 
     /**

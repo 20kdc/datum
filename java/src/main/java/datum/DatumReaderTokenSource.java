@@ -4,7 +4,7 @@
  * To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
-package gabien.datum;
+package datum;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -57,9 +57,15 @@ public class DatumReaderTokenSource extends DatumTokenSource {
             return tmp;
         }
         int val = readerRead();
-        if (val != '\\') {
-            if (val != -1)
-                lastCharClass = DatumCharClass.identify((char) val);
+        while (val == 13)
+            val = readerRead();
+        if (val == -1)
+            return -1;
+        lastCharClass = DatumCharClass.identify((char) val);
+        if (lastCharClass == DatumCharClass.Meta) {
+            if (val != '\\') 
+                throw new RuntimeException(position() + ": Invalid character " + val);
+        } else {
             return val;
         }
         lastCharClass = DatumCharClass.Content;

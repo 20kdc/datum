@@ -4,7 +4,7 @@
  * To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
-package gabien.datum;
+package datum;
 
 /**
  * Throws invalid errors on any kind of visit by default.
@@ -27,16 +27,6 @@ public class DatumInvalidVisitor extends DatumEncodingVisitor {
     }
 
     @Override
-    public void visitNumericUnknown(String s, DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect numeric " + s + " here");
-    }
-
-    @Override
-    public void visitSpecialUnknown(String s, DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect special ID " + s + " here");
-    }
-
-    @Override
     public void visitBoolean(boolean value, DatumSrcLoc loc) {
         throw new RuntimeException("Did not expect boolean " + value + " here");
     }
@@ -47,13 +37,13 @@ public class DatumInvalidVisitor extends DatumEncodingVisitor {
     }
 
     @Override
-    public void visitInt(long value, String raw, DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect int " + raw + " here");
+    public void visitInt(long value, DatumSrcLoc loc) {
+        throw new RuntimeException("Did not expect int " + value + " here");
     }
 
     @Override
-    public void visitFloat(double value, String raw, DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect float " + raw + " here");
+    public void visitFloat(double value, DatumSrcLoc loc) {
+        throw new RuntimeException("Did not expect float " + value + " here");
     }
 
     @Override

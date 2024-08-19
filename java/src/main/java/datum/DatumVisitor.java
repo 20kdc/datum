@@ -4,7 +4,7 @@
  * To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
-package gabien.datum;
+package datum;
 
 /**
  * Mechanism for receiving Datums.
@@ -24,17 +24,6 @@ public abstract class DatumVisitor {
     public abstract void visitId(String s, DatumSrcLoc loc);
 
     /**
-     * Called to visit an undecodable numeric value.
-     */
-    public abstract void visitNumericUnknown(String s, DatumSrcLoc loc);
-
-    /**
-     * Called to visit an undecodable special identifier.
-     * The string does not include the opening '#'.
-     */
-    public abstract void visitSpecialUnknown(String s, DatumSrcLoc loc);
-
-    /**
      * Called to visit a boolean.
      */
     public abstract void visitBoolean(boolean value, DatumSrcLoc loc);
@@ -47,38 +36,13 @@ public abstract class DatumVisitor {
     /**
      * Called to visit an integer.
      */
-    public abstract void visitInt(long value, String raw, DatumSrcLoc loc);
-
-    /**
-     * Called to visit an integer.
-     */
-    public final void visitInt(long value, DatumSrcLoc loc) {
-        visitInt(value, Long.toString(value), loc);
-    }
+    public abstract void visitInt(long value, DatumSrcLoc loc);
 
     /**
      * Called to visit a float.
      * The raw value is equivalent to the parameter to visitNumericUnknown.
      */
-    public abstract void visitFloat(double value, String raw, DatumSrcLoc loc);
-
-    /**
-     * Called to visit a float.
-     */
-    public final void visitFloat(double value, DatumSrcLoc loc) {
-        if (!Double.isFinite(value)) {
-            if (Double.isInfinite(value)) {
-                if (value > 0)
-                    visitFloat(value, "+inf.0", loc);
-                else
-                    visitFloat(value, "-inf.0", loc);
-            } else {
-                visitFloat(value, "+nan.0", loc);
-            }
-        } else {
-            visitFloat(value, Double.toString(value), loc);
-        }
-    }
+    public abstract void visitFloat(double value, DatumSrcLoc loc);
 
     // List start/end
 

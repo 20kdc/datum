@@ -6,6 +6,7 @@
  */
 package gabien.datum.test;
 
+import static datum.DatumTreeUtils.*;
 import static org.junit.Assert.*;
 
 import java.util.Arrays;
@@ -14,8 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Test;
 
-import gabien.datum.*;
-import static gabien.datum.DatumTreeUtils.*;
+import datum.*;
 
 /**
  * Test encoding/decoding datum trees.

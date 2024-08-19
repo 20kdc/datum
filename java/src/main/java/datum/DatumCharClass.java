@@ -4,7 +4,7 @@
  * To the extent possible under law, the author(s) have dedicated all copyright and related and neighboring rights to this software to the public domain worldwide. This software is distributed without any warranty.
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
-package gabien.datum;
+package datum;
 
 /**
  * Utilities to identify characters.
@@ -21,7 +21,8 @@ public enum DatumCharClass {
     ListEnd    (false, false, DatumTokenType.ListEnd),
     SpecialID  (true,  false, null),
     Digit      (true,  true,  null),
-    Sign       (true,  true,  null);
+    Sign       (true,  true,  null),
+    Meta       (false, false, null);
 
     /**
      * If true, this is valid in potential identifiers.
@@ -45,11 +46,13 @@ public enum DatumCharClass {
     }
 
     public static DatumCharClass identify(char c) {
-        // Order matters here, newline needs to override whitespace, everything overrides Content
-        if (c == '\n')
+        if (c == 10) {
             return Newline;
-        if (c <= 32 || c == 127)
+        } else if (c == 9 || c == 10 || c == 32) {
             return Whitespace;
+        } else if (c < 32 || c == 127 || c == '\\') {
+            return Meta;
+        }
         if (c == ';')
             return LineComment;
         if (c == '"')

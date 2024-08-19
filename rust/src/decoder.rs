@@ -44,13 +44,18 @@ impl DatumPipe for DatumDecoder {
     fn feed<F: FnMut(DatumChar)>(&mut self, char: char, f: &mut F) {
         self.0 = match self.0 {
             DatumDecoderState::Normal => {
-                let val = DatumChar::identify(char);
-                match val {
-                    Some(v) => {
-                        f(v);
-                        DatumDecoderState::Normal
-                    },
-                    None => DatumDecoderState::Escaping
+                if char == '\\' {
+                    DatumDecoderState::Escaping
+                } else if char == '\r' {
+                    DatumDecoderState::Normal
+                } else {
+                    match DatumChar::identify(char) {
+                        Some(v) => {
+                            f(v);
+                            DatumDecoderState::Normal
+                        },
+                        None => DatumDecoderState::Error
+                    }
                 }
             },
             DatumDecoderState::Escaping => {
