@@ -32,7 +32,7 @@
 // Sorry. - 20kdc
 
 use core::{convert::TryFrom, fmt::Write};
-use core::fmt::Debug;
+use core::fmt::{Debug, Display};
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -69,6 +69,12 @@ impl DatumValue {
                 writer.write_token(f, &le)
             }
         }
+    }
+}
+
+impl Display for DatumValue {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.write_to(f, &mut DatumWriter::default())
     }
 }
 

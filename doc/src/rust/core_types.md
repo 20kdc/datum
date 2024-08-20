@@ -93,4 +93,15 @@ Finally, if `alloc` is present, there are a number of pre-composed chains:
 * `datum_byte_to_value_pipeline`: `u8` stream to `DatumValue` stream.
 * `datum_char_to_value_pipeline`: `char` stream to `DatumValue` stream.
 
-Chances are, for any simple reading task, it will be enough to take the results of, say, `read_to_string`, run `.chars().via_datum_pipe(...)` and get what you want.
+Chances are, for any simple reading task, it will be enough to take the results of, say, [read_to_string](https://doc.rust-lang.org/std/fs/fn.read_to_string.html), run `.chars().via_datum_pipe(...)` and get what you want.
+
+In fact, let's do something like that:
+
+```rust
+# extern crate datum_rs;
+use datum_rs::{ViaDatumPipe, datum_char_to_value_pipeline};
+let source = "(the quick brown fox) jumped (over (the lazy dog))";
+for v in source.chars().via_datum_pipe(datum_char_to_value_pipeline()).map(|v| v.expect("the input should be valid")) {
+	println!("{}", v);
+}
+```

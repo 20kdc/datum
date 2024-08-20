@@ -5,7 +5,7 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use core::{convert::TryFrom, fmt::Write, ops::Deref};
+use core::{convert::TryFrom, fmt::{Display, Write}, ops::Deref};
 
 use crate::{datum_error, DatumError, DatumErrorKind, DatumResult, DatumToken};
 
@@ -89,5 +89,11 @@ impl<B: Deref<Target = str>> DatumAtom<B> {
             DatumAtom::Boolean(false) => f.write_str("#f"),
             DatumAtom::Nil => f.write_str("#nil")
         }
+    }
+}
+
+impl<B: Deref<Target = str>> Display for DatumAtom<B> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.write(f)
     }
 }
