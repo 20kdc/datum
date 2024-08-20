@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 use alloc::string::{String, ToString};
 use alloc::format;
 
-use crate::{datum_byte_to_value_pipeline, datum_char_to_token_pipeline, datum_char_to_value_pipeline, DatumAtom, DatumPipe, DatumToken, DatumWriter};
+use crate::{datum_byte_to_value_pipeline, datum_char_to_token_pipeline, datum_char_to_value_pipeline, DatumAtom, DatumPipe, DatumToken, DatumWriter, ViaDatumPipe};
 
 fn do_roundtrip_test(input: &str, output: &str) {
     let mut dectok1 = datum_char_to_token_pipeline();
@@ -35,11 +35,13 @@ fn do_roundtrip_test(input: &str, output: &str) {
     dtparse.feed_iter_to_vec(&mut out, input.bytes(), true).unwrap();
     let mut out_str = String::new();
     let mut writer = DatumWriter::default();
-    for v in out {
+    for v in &out {
         v.write_to(&mut out_str, &mut writer).unwrap();
         writer.write_newline(&mut out_str).unwrap();
     }
     assert_eq!(out_str, output);
+    // --- one final time, with feeling: iterator test ---
+    assert_eq!(out_str.bytes().via_datum_pipe(datum_byte_to_value_pipeline()).map(|v| v.unwrap()).count(), out.len());
 }
 
 fn tokenizer_should_error_eof(input: &str) {

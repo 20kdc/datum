@@ -10,7 +10,7 @@ use core::{convert::TryFrom, fmt::{Display, Write}, ops::Deref};
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 
-use crate::{datum_error, DatumChar, DatumCharClass, DatumCharEmit, DatumError, DatumErrorKind, DatumPipe, DatumPushable, DatumResult, DatumTokenType, DatumTokenizer, DatumTokenizerAction};
+use crate::{datum_error, DatumChar, DatumCharClass, DatumCharEmit, DatumError, DatumErrorKind, DatumPipe, DatumResult, DatumTokenType, DatumTokenizer, DatumTokenizerAction};
 
 /// Datum token with integrated string.
 /// Notably, integer/float are stored as their values here to prevent unwritable values existing.
@@ -218,12 +218,12 @@ impl Write for DatumFloatObserver<'_> {
 /// decoder.feed_iter_to_vec(&mut out, ("these become test symbols").chars(), true);
 /// ```
 #[derive(Clone, Default, Debug)]
-pub struct DatumPipeTokenizer<B: DatumPushable<char> + Deref<Target = str> + Default>(B, DatumTokenizer);
+pub struct DatumPipeTokenizer<B: Write + Deref<Target = str> + Default>(B, DatumTokenizer);
 
 #[cfg(feature = "alloc")]
 pub type DatumStringTokenizer = DatumPipeTokenizer<String>;
 
-impl<B: DatumPushable<char> + Deref<Target = str> + Default> DatumPipe for DatumPipeTokenizer<B> {
+impl<B: Write + Deref<Target = str> + Default> DatumPipe for DatumPipeTokenizer<B> {
     type Input = DatumChar;
     type Output = DatumToken<B>;
 
@@ -242,10 +242,10 @@ impl<B: DatumPushable<char> + Deref<Target = str> + Default> DatumPipe for Datum
     }
 }
 
-impl<B: DatumPushable<char> + Deref<Target = str> + Default> DatumPipeTokenizer<B> {
+impl<B: Write + Deref<Target = str> + Default> DatumPipeTokenizer<B> {
     fn transform_action<F: FnMut(DatumToken<B>) -> DatumResult<()>>(buffer: &mut B, char: char, action: DatumTokenizerAction, f: &mut F) -> DatumResult<()> {
         match action {
-            DatumTokenizerAction::Push => buffer.push(char),
+            DatumTokenizerAction::Push => buffer.write_char(char).map_err(|_| datum_error!(OutOfRoom, "failed to write to token buffer")),
             DatumTokenizerAction::Token(v) => f(DatumToken::try_from((v, core::mem::take(buffer)))?)
         }
     }

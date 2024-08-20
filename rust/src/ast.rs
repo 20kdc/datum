@@ -72,9 +72,6 @@ impl DatumValue {
     }
 }
 
-/// Maximum values that can be output from the parser per feed call
-pub const DATUM_PARSER_MAX_SIZE: usize = 1;
-
 /// Datum parser (from tokens into values).
 #[derive(Clone, Debug, Default)]
 pub struct DatumParser {

@@ -6,3 +6,5 @@
 	* [Implementor's Notes](./spec/impl_notes.md)
 	* [Appendix: Rationale](./spec/apx_rationale.md)
 	* [Appendix: State Machine Diagrams](./spec/apx_state_machines.md)
+* [Rust Implementation](./rust/intro.md)
+	* [Core Datatypes](./rust/core_types.md)

@@ -20,14 +20,8 @@ extern crate alloc;
 
 // Meta
 
-mod error;
-pub use error::*;
-
-mod array;
-pub use array::*;
-
-mod pipeline;
-pub use pipeline::*;
+mod core_types;
+pub use core_types::*;
 
 // Encoding
 
@@ -69,13 +63,6 @@ pub use ast::*;
 mod pipelines;
 #[cfg(feature = "alloc")]
 pub use pipelines::*;
-
-// Serde
-
-#[cfg(feature = "serde")]
-mod serde_support;
-#[cfg(feature = "serde")]
-pub use serde_support::*;
 
 // Big test battery
 
