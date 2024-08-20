@@ -94,23 +94,3 @@ Finally, if `alloc` is present, there are a number of pre-composed chains:
 * `datum_char_to_value_pipeline`: `char` stream to `DatumValue` stream.
 
 Chances are, for any simple reading task, it will be enough to take the results of, say, `read_to_string`, run `.chars().via_datum_pipe(...)` and get what you want.
-
-## AsyncUnwrap
-
-_Due to the `noop_waker` feature requiring Nightly Rust, this functionality requires the `unsafe` feature to reimplement the required functionality. This requirement may be dropped at a later date._
-
-`AsyncUnwrap` is a trait that allows Datum code to be written in Async Rust without sacrificing the ability to easily use it from runtimeless, non-async Rust.
-
-It does this by providing a very tiny async executor, callable as a trait method on `Future`.
-
-If the async code stops for any reason, it panics.
-
-```rust
-# extern crate datum_rs;
-use datum_rs::AsyncUnwrap;
-
-println!("{}", async {
-	println!("Blocking IO is fine.");
-	1
-}.expect("No async IO."));
-```

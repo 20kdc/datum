@@ -17,11 +17,6 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-#[cfg(feature = "unsafe")]
-mod async_unwrap;
-#[cfg(feature = "unsafe")]
-pub use async_unwrap::*;
-
 #[forbid(unsafe_code)]
 mod core_types;
 pub use core_types::*;

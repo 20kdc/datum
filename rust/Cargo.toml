@@ -7,8 +7,7 @@ license = "Unlicense"
 edition = "2018"
 
 [features]
-default = ["std", "detailed_errors", "unsafe"]
+default = ["std", "detailed_errors"]
 std = ["alloc"]
 alloc = []
 detailed_errors = []
-unsafe = []
