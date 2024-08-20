@@ -5,60 +5,72 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-//! Datum is an S-expression format meant for quick implementation in various languages.
-//! It's intended to be reasonably readable by R6RS readers, but not a strict subset (ultimately, this reduces complexity).
-//! The specification is available at <https://github.com/20kdc/gabien-common/blob/master/datum/specification.md>.
+//! TODO Rewrite crate outer desc.
 
-#![forbid(unsafe_code)]
+// Meta
 
+// should be pretty obvious
 #![cfg_attr(not(feature = "std"), no_std)]
-
-// so this extern crate business is being weird, let's deal with it
+#![cfg_attr(not(feature = "unsafe"), forbid(unsafe_code))]
+//#![forbid(unsafe_code)]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-// Meta
+#[cfg(feature = "unsafe")]
+mod async_unwrap;
+#[cfg(feature = "unsafe")]
+pub use async_unwrap::*;
 
+#[forbid(unsafe_code)]
 mod core_types;
 pub use core_types::*;
 
 // Encoding
 
+#[forbid(unsafe_code)]
 mod char_classes;
 pub use char_classes::*;
 
+#[forbid(unsafe_code)]
 mod decoder;
 pub use decoder::*;
 
+#[forbid(unsafe_code)]
 mod byte_decoder;
 pub use byte_decoder::*;
 
 // Tokenization
 
+#[forbid(unsafe_code)]
 mod token_core;
 pub use token_core::*;
 
+#[forbid(unsafe_code)]
 mod token;
 pub use token::*;
 
 // Values
 
+#[forbid(unsafe_code)]
 mod atom;
 pub use atom::*;
 
 // Writing
 
+#[forbid(unsafe_code)]
 mod writer;
 pub use writer::*;
 
 // AST (alloc-only)
 
+#[forbid(unsafe_code)]
 #[cfg(feature = "alloc")]
 mod ast;
 #[cfg(feature = "alloc")]
 pub use ast::*;
 
+#[forbid(unsafe_code)]
 #[cfg(feature = "alloc")]
 mod pipelines;
 #[cfg(feature = "alloc")]
@@ -66,6 +78,7 @@ pub use pipelines::*;
 
 // Big test battery
 
+#[forbid(unsafe_code)]
 #[cfg(feature = "alloc")]
 #[cfg(test)]
 mod tests;
