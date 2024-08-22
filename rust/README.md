@@ -1,8 +1,6 @@
 # `datum-rs`
 
-Datum is an S-expression format meant for quick implementation in various languages.
-
-It has a specification, available at <https://github.com/20kdc/gabien-common/blob/master/datum/specification.md>.
+Datum is a terse, human-writable data format meant for quick implementation in various languages.
 
 It was originally developed for use in some of my Java programs for the purpose of fulfilling the role of 'terse data language,' with some key distinctions:
 
@@ -23,12 +21,7 @@ In order to allow use in diverse environments, it attempts to follow some key ru
 
 With that said, it doesn't implement `serde` support at present.
 
-## TODO
-
-* Example program (a toy LISP perhaps?)
-* Shore up all the documentation
-* Figure out how to make doctests that rely on alloc while not being for alloc functions
-* If Datum is going to be a serious project I should probably move it out of the `gabien-common` umbrella. But also, that's probably going to mean the Java implementation has to be either left behind or things are going to get a little ugly. Basically, mass reorganization incoming.
+For further information, please see <https://github.com/20kdc/datum>.
 
 ## Features
 
