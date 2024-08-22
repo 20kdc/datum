@@ -97,3 +97,84 @@ impl<B: Deref<Target = str>> Display for DatumAtom<B> {
         self.write(f)
     }
 }
+
+/// Implemented by structs which may contain an Atom to give easy access to said Atom.
+pub trait DatumMayContainAtom<B: Deref<Target = str>> {
+    /// Retrieves a reference to the possible interior [DatumAtom].
+    fn as_atom(&self) -> Option<&DatumAtom<B>>;
+    /// Retrieves a mutable reference to the possible interior [DatumAtom].
+    fn as_atom_mut(&mut self) -> Option<&mut DatumAtom<B>>;
+    /// From the interior [DatumAtom] (if any), retrieves the string (if it is), else [None].
+    fn as_str(&self) -> Option<&B> {
+        if let Some(DatumAtom::String(res)) = self.as_atom() {
+            Some(res)
+        } else {
+            None
+        }
+    }
+    /// From the interior [DatumAtom] (if any), retrieves the symbol (if it is), else [None].
+    fn as_id(&self) -> Option<&B> {
+        if let Some(DatumAtom::ID(res)) = self.as_atom() {
+            Some(res)
+        } else {
+            None
+        }
+    }
+    /// From the interior [DatumAtom] (if any), retrieves the int (if it is), else [None].
+    fn as_i64(&self) -> Option<i64> {
+        if let Some(DatumAtom::Integer(res)) = self.as_atom() {
+            Some(*res)
+        } else {
+            None
+        }
+    }
+    /// From the interior [DatumAtom] (if any), retrieves the float (if it is), else [None].
+    fn as_f64(&self) -> Option<f64> {
+        if let Some(DatumAtom::Float(res)) = self.as_atom() {
+            Some(*res)
+        } else {
+            None
+        }
+    }
+    /// From the interior [DatumAtom] (if any), retrieves the float (if it is), else [None].
+    /// This version will cast integers to floats if necessary.
+    fn as_number(&self) -> Option<f64> {
+        if let Some(res) = self.as_atom() {
+            if let DatumAtom::Float(res) = res {
+                Some(*res)
+            } else if let DatumAtom::Integer(res) = res {
+                Some(*res as f64)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+    /// From the interior [DatumAtom] (if any), retrieves the boolean (if it is), else [None].
+    fn as_bool(&self) -> Option<bool> {
+        if let Some(DatumAtom::Boolean(res)) = self.as_atom() {
+            Some(*res)
+        } else {
+            None
+        }
+    }
+    /// From the interior [DatumAtom] (if any), returns [Some] if a nil value, else [None].
+    fn as_nil(&self) -> Option<()> {
+        if let Some(DatumAtom::Nil) = self.as_atom() {
+            Some(())
+        } else {
+            None
+        }
+    }
+}
+
+impl<B: Deref<Target = str>> DatumMayContainAtom<B> for DatumAtom<B> {
+    fn as_atom(&self) -> Option<&DatumAtom<B>> {
+        Some(self)
+    }
+
+    fn as_atom_mut(&mut self) -> Option<&mut DatumAtom<B>> {
+        Some(self)
+    }
+}

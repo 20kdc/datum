@@ -36,7 +36,7 @@ use core::fmt::{Debug, Display};
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::{datum_error, DatumAtom, DatumPipe, DatumResult, DatumError, DatumErrorKind, DatumToken, DatumTokenType, DatumWriter};
+use crate::{datum_error, DatumAtom, DatumError, DatumErrorKind, DatumMayContainAtom, DatumPipe, DatumResult, DatumToken, DatumTokenType, DatumWriter};
 
 /// Datum AST node / value.
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
@@ -75,6 +75,23 @@ impl DatumValue {
 impl Display for DatumValue {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.write_to(f, &mut DatumWriter::default())
+    }
+}
+
+impl DatumMayContainAtom<String> for DatumValue {
+    fn as_atom(&self) -> Option<&DatumAtom<String>> {
+        if let DatumValue::Atom(a) = self {
+            Some(a)
+        } else {
+            None
+        }
+    }
+    fn as_atom_mut(&mut self) -> Option<&mut DatumAtom<String>> {
+        if let DatumValue::Atom(a) = self {
+            Some(a)
+        } else {
+            None
+        }
     }
 }
 

@@ -10,7 +10,7 @@ use alloc::collections::VecDeque;
 
 /// Any error producible by Datum.
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DatumErrorKind {
     /// Ran out of room in a buffer.
     OutOfRoom,
