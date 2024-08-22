@@ -11,6 +11,7 @@ use datum_rs::{DatumAtom, DatumErrorKind, DatumMayContainAtom, DatumValue, ViaDa
 use rand::RngCore;
 use rustyline::config::Configurer;
 
+// ANCHOR: virtual-machine
 /// Operation between two numbers.
 #[derive(Clone, Copy)]
 enum Binop {
@@ -47,6 +48,7 @@ enum CompiledExpr {
 }
 
 impl CompiledExpr {
+    /// Runs the expression with the given arguments.
     fn run(&self, args: &[f64]) -> f64 {
         match self {
             Self::Arg(i) => args[*i],
@@ -56,7 +58,7 @@ impl CompiledExpr {
         }
     }
 
-    /// Translates expression args for inlining.
+    /// Returns a copy with the expression arguments replaced with further expressions.
     fn translate(&self, args: &[CompiledExpr]) -> Self {
         match self {
             Self::Arg(i) => args[*i].clone(),
@@ -66,22 +68,85 @@ impl CompiledExpr {
         }
     }
 }
+// ANCHOR_END: virtual-machine
 
-/// The calculator machine itself.
-struct Machine {
-    /// User-defined functions.
-    functions: Vec<(String, usize, CompiledExpr)>
+// ANCHOR: environment
+struct Function {
+    name: String,
+    args: usize,
+    expr: CompiledExpr
 }
 
-impl Machine {
+/// The calculator environment itself.
+struct Environment {
+    /// User-defined functions.
+    functions: Vec<Function>
+}
+
+impl Environment {
+    fn new() -> Environment {
+        Environment {
+            functions: vec![
+                Function { name: ("+").to_string(),   args: 2, expr: CompiledExpr::Binop(Binop::Add, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1))) },
+                Function { name: ("-").to_string(),   args: 2, expr: CompiledExpr::Binop(Binop::Sub, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1))) },
+                Function { name: ("/").to_string(),   args: 2, expr: CompiledExpr::Binop(Binop::Div, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1))) },
+                Function { name: ("*").to_string(),   args: 2, expr: CompiledExpr::Binop(Binop::Mul, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1))) },
+                Function { name: ("min").to_string(), args: 2, expr: CompiledExpr::Binop(Binop::Min, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1))) },
+                Function { name: ("max").to_string(), args: 2, expr: CompiledExpr::Binop(Binop::Max, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1))) },
+                Function { name: ("abs").to_string(), args: 1, expr: CompiledExpr::Abs(Box::new(CompiledExpr::Arg(0))) },
+            ]
+        }
+    }
     /// Get function index of existing function
     fn fn_index_for(&self, name: &str, args: usize) -> Option<usize> {
         for (k, v) in self.functions.iter().enumerate() {
-            if v.0.eq(name) && v.1 == args {
+            if v.name.eq(name) && v.args == args {
                 return Some(k);
             }
         }
         None
+    }
+}
+// ANCHOR_END: environment
+
+// ANCHOR: compiler
+impl Environment {
+    /// Compiles an expression (or returns None, failing).
+    fn compile_expr(&self, args: &HashMap<String, usize>, expr: &DatumValue) -> Option<CompiledExpr> {
+        match expr {
+            DatumValue::Atom(DatumAtom::ID(id)) => {
+                if let Some(k) = args.get(id) {
+                    Some(CompiledExpr::Arg(*k))
+                } else if let Some(fid) = self.fn_index_for(id, 0) {
+                    Some(CompiledExpr::Const(self.functions[fid].expr.run(&[])))
+                } else {
+                    println!("No such arg: {}", id);
+                    None
+                }
+            },
+            DatumValue::Atom(DatumAtom::Float(v)) => Some(CompiledExpr::Const(*v)),
+            DatumValue::Atom(DatumAtom::Integer(v)) => Some(CompiledExpr::Const(*v as f64)),
+            DatumValue::List(list) => {
+                if let Some(DatumValue::Atom(DatumAtom::ID(sym))) = &list.get(0) {
+                    let call_args = &list[1..];
+                    if let Some(fni) = self.fn_index_for(&sym, call_args.len()) {
+                        let v = &self.functions[fni];
+                        // compile expressions, and if successful, translate them into our args
+                        self.compile_exprs(args, call_args).map(|compiled_call_args| v.expr.translate(&compiled_call_args))
+                    } else {
+                        println!("Function not defined: {} #{}", sym, call_args.len());
+                        None
+                    }
+                } else {
+                    println!("Cannot have this kind of list: {:?}", list);
+                    None
+                }
+            },
+            _ => {
+                println!("Not usable here: {:?}", expr);
+                None
+            }
+        }
     }
     /// Compiles a list of expressions (or returns None, failing).
     fn compile_exprs(&self, args: &HashMap<String, usize>, exprs: &[DatumValue]) -> Option<Vec<CompiledExpr>> {
@@ -91,45 +156,6 @@ impl Machine {
             None
         } else {
             Some(exprs_compiled)
-        }
-    }
-    /// Compiles an expression (or returns None, failing).
-    fn compile_expr(&self, args: &HashMap<String, usize>, expr: &DatumValue) -> Option<CompiledExpr> {
-        match expr {
-            DatumValue::Atom(atom) => match atom {
-                DatumAtom::ID(id) => {
-                    if let Some(k) = args.get(id) {
-                        Some(CompiledExpr::Arg(*k))
-                    } else if let Some(fid) = self.fn_index_for(id, 0) {
-                        Some(CompiledExpr::Const(self.functions[fid].2.run(&[])))
-                    } else {
-                        println!("No such arg: {}", id);
-                        None
-                    }
-                },
-                DatumAtom::Float(v) => Some(CompiledExpr::Const(*v)),
-                DatumAtom::Integer(v) => Some(CompiledExpr::Const(*v as f64)),
-                _ => {
-                    println!("Atom not usable here: {:?}", atom);
-                    None
-                }
-            },
-            DatumValue::List(list) => {
-                if let Some(DatumValue::Atom(DatumAtom::ID(sym))) = &list.get(0) {
-                    let call_args = &list[1..];
-                    if let Some(fni) = self.fn_index_for(&sym, call_args.len()) {
-                        let v = &self.functions[fni];
-                        // compile expressions, and if successful, translate them into our args
-                        self.compile_exprs(args, call_args).map(|compiled_call_args| v.2.translate(&compiled_call_args))
-                    } else {
-                        println!("Function not defined: {} #{}", sym, call_args.len());
-                        None
-                    }
-                } else {
-                    println!("Cannot have this kind of list: {:?}", list);
-                    None
-                }
-            }
         }
     }
     /// Expression execution. Returns false on failure.
@@ -142,6 +168,11 @@ impl Machine {
             None => false
         }
     }
+}
+// ANCHOR_END: compiler
+
+// ANCHOR: executor
+impl Environment {
     /// High-level execution.
     /// This includes the 'meta' forms (def and minimize).
     /// Returns false on failure.
@@ -176,7 +207,11 @@ impl Machine {
                                 // replace (not override due to inlining)
                                 self.functions.remove(fni);
                             }
-                            self.functions.push((res, argslice.len(), success));
+                            self.functions.push(Function {
+                                name: res,
+                                args: argslice.len(),
+                                expr: success
+                            });
                             true
                         } else {
                             false
@@ -217,7 +252,7 @@ impl Machine {
                             return false;
                         };
                         // This is the actual 'solver'. I am aware you are probably not supposed to solve equations this way, but it works!
-                        let mut values_score = self.functions[fni].2.run(&values).abs();
+                        let mut values_score = self.functions[fni].expr.run(&values).abs();
                         let mut at_this_score_half_magnitude = values_score / 2.0;
                         let mut values_test = values.clone();
                         println!("initial score {}", values_score);
@@ -227,7 +262,7 @@ impl Machine {
                                 let ofs = (((rng.next_u32() as f64) / (u32::max_value() as f64)) - 0.5) * 2.0 * magnitude;
                                 *v = values[k] + ofs;
                             }
-                            let new_score = self.functions[fni].2.run(&values_test).abs();
+                            let new_score = self.functions[fni].expr.run(&values_test).abs();
                             if new_score < values_score {
                                 values.copy_from_slice(&values_test);
                                 values_score = new_score;
@@ -253,7 +288,9 @@ impl Machine {
         }
     }
 }
+// ANCHOR_END: executor
 
+// ANCHOR: main
 fn main() {
     let mut rl = rustyline::DefaultEditor::new().expect("rustyline expected to initialize");
     rl.set_auto_add_history(true);
@@ -266,17 +303,7 @@ fn main() {
     println!(" this will attempt to bring (abs (name initial...)) to under tolerance");
     println!("Example: (def problem x (- (- (* x 2) 5) 9)) (minimize problem 1 0.001 0)");
     let mut combo_buffer = String::new();
-    let mut machine = Machine {
-        functions: vec![
-            (("+").to_string(), 2, CompiledExpr::Binop(Binop::Add, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1)))),
-            (("-").to_string(), 2, CompiledExpr::Binop(Binop::Sub, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1)))),
-            (("/").to_string(), 2, CompiledExpr::Binop(Binop::Div, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1)))),
-            (("*").to_string(), 2, CompiledExpr::Binop(Binop::Mul, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1)))),
-            (("min").to_string(), 2, CompiledExpr::Binop(Binop::Min, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1)))),
-            (("max").to_string(), 2, CompiledExpr::Binop(Binop::Max, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1)))),
-            (("abs").to_string(), 1, CompiledExpr::Abs(Box::new(CompiledExpr::Arg(0)))),
-        ]
-    };
+    let mut env = Environment::new();
     loop {
         let mut should_clear_combo_buffer = true;
         let mut prompt: &'static str = &"> ";
@@ -298,7 +325,7 @@ fn main() {
                             break;
                         },
                         Ok(v) => {
-                            if !machine.execute(&v) {
+                            if !env.execute(&v) {
                                 break;
                             }
                         }
@@ -318,3 +345,4 @@ fn main() {
         }
     }
 }
+// ANCHOR_END: main

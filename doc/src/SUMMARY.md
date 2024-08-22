@@ -8,3 +8,4 @@
 	* [Appendix: State Machine Diagrams](./spec/apx_state_machines.md)
 * [Rust Implementation](./rust/intro.md)
 	* [Core Datatypes](./rust/core_types.md)
+	* [Example: Desk Calculator](./rust/ex_calculator.md)

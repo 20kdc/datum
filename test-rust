@@ -8,5 +8,5 @@ cargo doc
 cargo tarpaulin
 cargo build --all-features
 cd ..
-mdbook test doc -L rust/target/debug/deps/
+mdbook test doc -L target/debug/deps/
 # also check: cargo semver-checks
