@@ -70,6 +70,14 @@ impl DatumValue {
             }
         }
     }
+
+    /// If this value is a list, returns a reference to it, otherwise [None].
+    pub fn as_list(&self) -> Option<&Vec<DatumValue>> {
+        match self {
+            DatumValue::List(list) => Some(list),
+            _ => None
+        }
+    }
 }
 
 impl Display for DatumValue {

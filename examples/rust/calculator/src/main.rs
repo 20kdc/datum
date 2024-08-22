@@ -5,6 +5,8 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
+use std::collections::HashMap;
+
 use datum_rs::{DatumAtom, DatumErrorKind, DatumMayContainAtom, DatumValue, ViaDatumPipe};
 use rand::RngCore;
 use rustyline::config::Configurer;
@@ -82,7 +84,7 @@ impl Machine {
         None
     }
     /// Compiles a list of expressions (or returns None, failing).
-    fn compile_exprs(&self, args: &[String], exprs: &[DatumValue]) -> Option<Vec<CompiledExpr>> {
+    fn compile_exprs(&self, args: &HashMap<String, usize>, exprs: &[DatumValue]) -> Option<Vec<CompiledExpr>> {
         let mut stop_now = false;
         let exprs_compiled: Vec<CompiledExpr> = exprs.iter().map(|arg| self.compile_expr(args, arg)).inspect(|v| stop_now |= v.is_none()).map(|v| v.unwrap_or(CompiledExpr::Const(0.0))).collect();
         if stop_now {
@@ -92,17 +94,18 @@ impl Machine {
         }
     }
     /// Compiles an expression (or returns None, failing).
-    fn compile_expr(&self, args: &[String], expr: &DatumValue) -> Option<CompiledExpr> {
+    fn compile_expr(&self, args: &HashMap<String, usize>, expr: &DatumValue) -> Option<CompiledExpr> {
         match expr {
             DatumValue::Atom(atom) => match atom {
                 DatumAtom::ID(id) => {
-                    for (k, v) in args.iter().enumerate() {
-                        if v.eq(id) {
-                            return Some(CompiledExpr::Arg(k));
-                        }
+                    if let Some(k) = args.get(id) {
+                        Some(CompiledExpr::Arg(*k))
+                    } else if let Some(fid) = self.fn_index_for(id, 0) {
+                        Some(CompiledExpr::Const(self.functions[fid].2.run(&[])))
+                    } else {
+                        println!("No such arg: {}", id);
+                        None
                     }
-                    println!("No such arg: {}", id);
-                    None
                 },
                 DatumAtom::Float(v) => Some(CompiledExpr::Const(*v)),
                 DatumAtom::Integer(v) => Some(CompiledExpr::Const(*v as f64)),
@@ -112,10 +115,7 @@ impl Machine {
                 }
             },
             DatumValue::List(list) => {
-                if list.len() == 0 {
-                    println!("The empty list is not valid");
-                    None
-                } else if let DatumValue::Atom(DatumAtom::ID(sym)) = &list[0] {
+                if let Some(DatumValue::Atom(DatumAtom::ID(sym))) = &list.get(0) {
                     let call_args = &list[1..];
                     if let Some(fni) = self.fn_index_for(&sym, call_args.len()) {
                         let v = &self.functions[fni];
@@ -134,7 +134,7 @@ impl Machine {
     }
     /// Expression execution. Returns false on failure.
     fn execute_expr(&mut self, value: &DatumValue) -> bool {
-        match self.compile_expr(&[], value) {
+        match self.compile_expr(&HashMap::new(), value) {
             Some(expr) => {
                 println!("= {}", expr.run(&[]));
                 true
@@ -142,115 +142,114 @@ impl Machine {
             None => false
         }
     }
-    /// High-level execution. Returns false on failure.
+    /// High-level execution.
+    /// This includes the 'meta' forms (def and minimize).
+    /// Returns false on failure.
     fn execute(&mut self, value: &DatumValue) -> bool {
-        match value {
-            DatumValue::Atom(_) => self.execute_expr(value),
-            DatumValue::List(list) => {
-                match list.get(0) {
-                    Some(DatumValue::Atom(DatumAtom::ID(syntax_maybe))) => {
-                        if syntax_maybe.eq("def") {
-                            if list.len() < 3 {
-                                println!("def has to be at least 3 items long");
+        if let Some(list) = value.as_list() {
+            match list.get(0) {
+                Some(DatumValue::Atom(DatumAtom::ID(syntax_maybe))) => {
+                    if syntax_maybe.eq("def") {
+                        if list.len() < 3 {
+                            println!("def has to be at least 3 items long");
+                            return false;
+                        }
+                        let res = if let Some(sym) = list[1].as_id() {
+                            sym.to_string()
+                        } else {
+                            println!("def name must be an ID");
+                            return false;
+                        };
+                        let argslice = &list[2..list.len() - 1];
+                        let mut argsyms: HashMap<String, usize> = HashMap::new();
+                        for (k, v) in argslice.iter().enumerate() {
+                            if let Some(sym) = v.as_id() {
+                                argsyms.insert(sym.to_string(), k);
+                            } else {
+                                println!("def args must be IDs");
                                 return false;
                             }
-                            let res = if let DatumValue::Atom(DatumAtom::ID(sym)) = &list[1] {
-                                sym.to_string()
-                            } else {
-                                println!("def name must be an ID");
-                                return false;
-                            };
-                            let mut argsyms: Vec<String> = Vec::new();
-                            for v in &list[2..list.len() - 1] {
-                                if let DatumValue::Atom(DatumAtom::ID(sym)) = v {
-                                    argsyms.push(sym.to_string());
-                                } else {
-                                    println!("def args must be IDs");
-                                    return false;
-                                }
+                        }
+                        let compiled = self.compile_expr(&argsyms, &list[list.len() - 1]);
+                        if let Some(success) = compiled {
+                            if let Some(fni) = self.fn_index_for(&res, argslice.len()) {
+                                // replace (not override due to inlining)
+                                self.functions.remove(fni);
                             }
-                            let compiled = self.compile_expr(&argsyms, &list[list.len() - 1]);
-                            if let Some(success) = compiled {
-                                if let Some(fni) = self.fn_index_for(&res, argsyms.len()) {
-                                    // replace (not override due to inlining)
-                                    self.functions.remove(fni);
-                                }
-                                self.functions.push((res, argsyms.len(), success));
-                                true
-                            } else {
-                                false
-                            }
-                        } else if syntax_maybe.eq("minimize") {
-                            if list.len() < 4 {
-                                println!("minimize has to be at least 4 items long");
-                                return false;
-                            }
-                            let sym = if let Some(sym) = list[1].as_id() {
-                                sym
-                            } else {
-                                println!("name must be symbol");
-                                return false;
-                            };
-                            let mut magnitude = if let Some(magnitude) = list[2].as_number() {
-                                magnitude
-                            } else {
-                                println!("magnitude must be number");
-                                return false;
-                            };
-                            let tolerance = if let Some(tolerance) = list[3].as_number() {
-                                tolerance
-                            } else {
-                                println!("tolerance must be number");
-                                return false;
-                            };
-                            let initial_value_exprs = if let Some(ive) = self.compile_exprs(&[], &list[4..]) {
-                                ive
-                            } else {
-                                return false;
-                            };
-                            let mut values: Vec<f64> = initial_value_exprs.iter().map(|expr| expr.run(&[])).collect();
-                            let fni = if let Some(fni) = self.fn_index_for(&sym, initial_value_exprs.len()) {
-                                fni
-                            } else {
-                                println!("function {} #{} does not exist", sym, initial_value_exprs.len());
-                                return false;
-                            };
-                            // engine
-                            let mut values_score = self.functions[fni].2.run(&values).abs();
-                            let mut at_this_score_half_magnitude = values_score / 2.0;
-                            let mut values_test = values.clone();
-                            println!("initial score {}", values_score);
-                            let mut rng = rand::thread_rng();
-                            loop {
-                                if values_score < tolerance {
-                                    break
-                                }
-                                for (k, v) in values_test.iter_mut().enumerate() {
-                                    let ofs = (((rng.next_u32() as f64) / (u32::max_value() as f64)) - 0.5) * 2.0 * magnitude;
-                                    *v = values[k] + ofs;
-                                }
-                                let new_score = self.functions[fni].2.run(&values_test).abs();
-                                if new_score < values_score {
-                                    values.copy_from_slice(&values_test);
-                                    values_score = new_score;
-                                    println!("@ score {}", values_score);
-                                    while values_score < at_this_score_half_magnitude {
-                                        magnitude /= 2.0;
-                                        at_this_score_half_magnitude /= 2.0;
-                                    }
-                                }
-                            }
-                            for value in values {
-                                println!("= {}", value);
-                            }
+                            self.functions.push((res, argslice.len(), success));
                             true
                         } else {
-                            self.execute_expr(value)
+                            false
                         }
+                    } else if syntax_maybe.eq("minimize") {
+                        if list.len() < 4 {
+                            println!("minimize has to be at least 4 items long");
+                            return false;
+                        }
+                        let sym = if let Some(sym) = list[1].as_id() {
+                            sym
+                        } else {
+                            println!("name must be symbol");
+                            return false;
+                        };
+                        let mut magnitude = if let Some(magnitude) = list[2].as_number() {
+                            magnitude
+                        } else {
+                            println!("magnitude must be number");
+                            return false;
+                        };
+                        let tolerance = if let Some(tolerance) = list[3].as_number() {
+                            tolerance
+                        } else {
+                            println!("tolerance must be number");
+                            return false;
+                        };
+                        let initial_value_exprs = if let Some(ive) = self.compile_exprs(&HashMap::new(), &list[4..]) {
+                            ive
+                        } else {
+                            return false;
+                        };
+                        let mut values: Vec<f64> = initial_value_exprs.iter().map(|expr| expr.run(&[])).collect();
+                        let fni = if let Some(fni) = self.fn_index_for(&sym, initial_value_exprs.len()) {
+                            fni
+                        } else {
+                            println!("function {} #{} does not exist", sym, initial_value_exprs.len());
+                            return false;
+                        };
+                        // This is the actual 'solver'. I am aware you are probably not supposed to solve equations this way, but it works!
+                        let mut values_score = self.functions[fni].2.run(&values).abs();
+                        let mut at_this_score_half_magnitude = values_score / 2.0;
+                        let mut values_test = values.clone();
+                        println!("initial score {}", values_score);
+                        let mut rng = rand::thread_rng();
+                        while values_score >= tolerance {
+                            for (k, v) in values_test.iter_mut().enumerate() {
+                                let ofs = (((rng.next_u32() as f64) / (u32::max_value() as f64)) - 0.5) * 2.0 * magnitude;
+                                *v = values[k] + ofs;
+                            }
+                            let new_score = self.functions[fni].2.run(&values_test).abs();
+                            if new_score < values_score {
+                                values.copy_from_slice(&values_test);
+                                values_score = new_score;
+                                println!("@ score {}", values_score);
+                                while values_score < at_this_score_half_magnitude {
+                                    magnitude /= 2.0;
+                                    at_this_score_half_magnitude /= 2.0;
+                                }
+                            }
+                        }
+                        for value in values {
+                            println!("= {}", value);
+                        }
+                        true
+                    } else {
+                        self.execute_expr(value)
                     }
-                    _ => self.execute_expr(value)
                 }
+                _ => self.execute_expr(value)
             }
+        } else {
+            self.execute_expr(value)
         }
     }
 }
@@ -260,12 +259,12 @@ fn main() {
     rl.set_auto_add_history(true);
     println!("Desk Calculator");
     println!("A datum-rs Example Program");
-    println!("Basic operations are (+ X Y) (- X Y) (/ X Y) (* X Y) (min X Y) (max X Y) (abs X) (error X Y)");
+    println!("Basic operations are (+ X Y) (- X Y) (/ X Y) (* X Y) (min X Y) (max X Y) (abs X)");
     println!("Functions can be defined with (def name args... expr)");
     println!(" different arg counts count as different functions");
     println!("Solve a function with (minimize name magnitude tolerance initial...)");
     println!(" this will attempt to bring (abs (name initial...)) to under tolerance");
-    println!("Example: (def problem x (error (- (* x 2) 5) 9)) (minimize problem 1 0.001 0)");
+    println!("Example: (def problem x (- (- (* x 2) 5) 9)) (minimize problem 1 0.001 0)");
     let mut combo_buffer = String::new();
     let mut machine = Machine {
         functions: vec![
@@ -276,7 +275,6 @@ fn main() {
             (("min").to_string(), 2, CompiledExpr::Binop(Binop::Min, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1)))),
             (("max").to_string(), 2, CompiledExpr::Binop(Binop::Max, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1)))),
             (("abs").to_string(), 1, CompiledExpr::Abs(Box::new(CompiledExpr::Arg(0)))),
-            (("error").to_string(), 2, CompiledExpr::Abs(Box::new(CompiledExpr::Binop(Binop::Sub, Box::new(CompiledExpr::Arg(0)), Box::new(CompiledExpr::Arg(1)))))),
         ]
     };
     loop {
