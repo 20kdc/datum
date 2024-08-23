@@ -34,14 +34,15 @@ The encoding layer converts a stream of characters to a potentially different st
 Character values 0 through 8 inclusive, 11, 12, 14 through 31 inclusive, and 127, are *forbidden,* and MUST NOT appear in the input character stream.
 They may appear in hex escapes, but for 0 (null) specifically, the results of this are undefined.
 
-13 (CR) is always immediately discarded.
+13 (CR) is always immediately discarded and will not be considered, including in the parsing of escape sequences.
 
 ### Escape Sequences
 
 The backslash, 92 `\`, begins an escape sequence, which always produces *content-class* characters.
 
-The backslash may be followed by any valid character, in which case that is the result.
-However, these specific characters have special meanings:
+The backslash may be followed by any valid character, except for newline (10), which is an error in this case.
+
+In addition, these specific characters have special meanings:
 
 * 117 `x`: Followed by a non-zero amount of hexadecimal digits, terminated by a semicolon 59 `;`. Indicates a Unicode codepoint. MUST be properly terminated, or the document is invalid.
 * 110 `n`: Newline/10.

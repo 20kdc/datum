@@ -40,12 +40,13 @@ impl DatumPipe for DatumDecoder {
     }
 
     fn feed<F: FnMut(DatumChar) -> DatumResult<()>>(&mut self, char: char, f: &mut F) -> DatumResult<()> {
+        if char == '\r' {
+            return Ok(());
+        }
         let new_state = match self.0 {
             DatumDecoderState::Normal => {
                 if char == '\\' {
                     Ok(DatumDecoderState::Escaping)
-                } else if char == '\r' {
-                    Ok(DatumDecoderState::Normal)
                 } else {
                     match DatumChar::identify(char) {
                         Some(v) => {
@@ -72,6 +73,9 @@ impl DatumPipe for DatumDecoder {
                     },
                     'x' => {
                         Ok(DatumDecoderState::HexEscape(0))
+                    },
+                    '\n' => {
+                        Err(datum_error!(BadData, "newline in escape sequence"))
                     },
                     _ => {
                         f(DatumChar::content(char))?;

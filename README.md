@@ -23,11 +23,11 @@ Implementations exist for:
 
 ## TODO
 
-* **Figure out the Line Comment Escape problem**
 * Figure out datum-rs source positioning
 * Figure out how to make doctests that rely on alloc while not being for alloc functions?
 * Go over datum-rs with a fine-toothed comb
 * Java impl needs Javadocs
+* Rename Java classes to avoid confusion on meaning of 'decode'
 * Shore up all the documentation
 * Simultaneous release of v1.0.0 for Java and Rust
 

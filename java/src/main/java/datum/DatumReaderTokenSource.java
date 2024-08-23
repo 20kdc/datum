@@ -72,6 +72,8 @@ public class DatumReaderTokenSource extends DatumTokenSource {
         val = readerRead();
         if (val == -1)
             throw new RuntimeException(position() + ": \\ without escape");
+        if (val == '\n')
+            throw new RuntimeException(position() + ": \\ with newline");
         if (val == 'r')
             return '\r';
         if (val == 'n')
