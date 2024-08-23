@@ -94,13 +94,6 @@ impl DatumMayContainAtom<String> for DatumValue {
             None
         }
     }
-    fn as_atom_mut(&mut self) -> Option<&mut DatumAtom<String>> {
-        if let DatumValue::Atom(a) = self {
-            Some(a)
-        } else {
-            None
-        }
-    }
 }
 
 /// Datum parser (from tokens into values).

@@ -115,7 +115,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                         f.write_char(v)?;
                     }
                 }
-                f.write_char('\"')?;
+                f.write_char('\"')
             },
             Self::ID(b) => {
                 let mut chars = b.chars();
@@ -139,12 +139,13 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                         for remainder in chars {
                             DatumChar::potential_identifier(remainder).write(f)?;
                         }
+                        core::fmt::Result::Ok(())
                     },
                     None => {
                         f.write_char('#')?;
                         f.write_char('{')?;
                         f.write_char('}')?;
-                        f.write_char('#')?;
+                        f.write_char('#')
                     }
                 }
             },
@@ -154,10 +155,9 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                 for remainder in chars {
                     DatumChar::potential_identifier(remainder).write(f)?;
                 }
+                core::fmt::Result::Ok(())
             },
-            Self::Integer(v) => {
-                core::fmt::write(f, format_args!("{}", v))?;
-            },
+            Self::Integer(v) => core::fmt::write(f, format_args!("{}", v)),
             Self::Float(v) => {
                 if v.is_nan() {
                     f.write_str("#i+nan.0")?;
@@ -177,15 +177,11 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                         f.write_str(".0")?;
                     }
                 }
+                core::fmt::Result::Ok(())
             },
-            Self::ListStart => {
-                f.write_char('(')?;
-            },
-            Self::ListEnd => {
-                f.write_char(')')?;
-            }
+            Self::ListStart => f.write_char('('),
+            Self::ListEnd => f.write_char(')')
         }
-        core::fmt::Result::Ok(())
     }
 }
 
@@ -229,24 +225,21 @@ impl<B: Write + Deref<Target = str> + Default> DatumPipe for DatumPipeTokenizer<
 
     fn feed<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, i: Self::Input, f: &mut F) -> DatumResult<()> {
         let m0 = &mut self.0;
-        self.1.feed(i.class(), &mut |v| {
-            Self::transform_action(m0, i.char(), v, f)
+        self.1.feed(i.class(), &mut |action| {
+            match action {
+                DatumTokenizerAction::Push => m0.write_char(i.char()).map_err(|_| datum_error!(OutOfRoom, "failed to write to token buffer")),
+                DatumTokenizerAction::Token(v) => f(DatumToken::try_from((v, core::mem::take(m0)))?)
+            }
         })
     }
 
     fn eof<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, f: &mut F) -> DatumResult<()> {
         let m0 = &mut self.0;
-        self.1.eof(&mut |v| {
-            Self::transform_action(m0, ' ', v, f)
+        self.1.eof(&mut |action| {
+            match action {
+                DatumTokenizerAction::Push => unreachable!(),
+                DatumTokenizerAction::Token(v) => f(DatumToken::try_from((v, core::mem::take(m0)))?)
+            }
         })
-    }
-}
-
-impl<B: Write + Deref<Target = str> + Default> DatumPipeTokenizer<B> {
-    fn transform_action<F: FnMut(DatumToken<B>) -> DatumResult<()>>(buffer: &mut B, char: char, action: DatumTokenizerAction, f: &mut F) -> DatumResult<()> {
-        match action {
-            DatumTokenizerAction::Push => buffer.write_char(char).map_err(|_| datum_error!(OutOfRoom, "failed to write to token buffer")),
-            DatumTokenizerAction::Token(v) => f(DatumToken::try_from((v, core::mem::take(buffer)))?)
-        }
     }
 }

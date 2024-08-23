@@ -23,9 +23,13 @@ Implementations exist for:
 
 ## TODO
 
+* Use `rustyline` correctly in example code
 * Figure out datum-rs source positioning
 * Figure out how to make doctests that rely on alloc while not being for alloc functions?
 * Go over datum-rs with a fine-toothed comb
+* Do the libraries need to go on a diet?
+    * Java: Way too many kinds of Visitor specific to all the very niche cases that came up in use in GaBIEn
+    * Rust: So I'm convinced not using async is a mistake (because of the wide variety of state machines that are better with control flow) and I'm also convinced using async would be a mistake (because it doesn't do *that* much when you account for necessary overhead). FIGURE THIS OUT.
 * Java impl needs Javadocs
 * Rename Java classes to avoid confusion on meaning of 'decode'
 * Shore up all the documentation

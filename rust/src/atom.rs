@@ -12,21 +12,15 @@ use crate::{datum_error, DatumError, DatumErrorKind, DatumResult, DatumToken};
 /// Atomic Datum AST value.
 /// This enum also contains the functions that convert between tokens and atoms.
 /// You can think of it as the bridge between Datum's tokenization model and value model.
-#[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Debug, Default)]
 pub enum DatumAtom<B: Deref<Target = str>> {
     String(B),
     ID(B),
     Integer(i64),
     Float(f64),
     Boolean(bool),
+    #[default]
     Nil
-}
-
-impl<B: Deref<Target = str>> Default for DatumAtom<B> {
-    #[inline]
-    fn default() -> Self {
-        Self::Nil
-    }
 }
 
 impl<B: Default + Deref<Target = str>> TryFrom<DatumToken<B>> for DatumAtom<B> {
@@ -98,44 +92,52 @@ impl<B: Deref<Target = str>> Display for DatumAtom<B> {
     }
 }
 
+macro_rules! as_x_result {
+    ($caller:ident, $callee:ident, $type:ty) => {
+        #[doc = concat!("Wraps [DatumMayContainAtom::", stringify!($callee), "] to return [Result], using the given error generator.")]
+        fn $caller<E, F: FnOnce() -> E>(&self, err: F) -> Result<$type, E> {
+            match self.$callee() {
+                Some(v) => Ok(v),
+                None => Err(err())
+            }
+        }
+    };
+}
+
+macro_rules! as_x {
+    ($name:ident, $name_result:ident, $variant:ident, $type:ty) => {
+        #[doc = concat!("Attempts to retrieve [DatumAtom::", stringify!($variant), "], else [None].")]
+        fn $name(&self) -> Option<$type> {
+            if let Some(DatumAtom::$variant(res)) = self.as_atom() {
+                Some(res)
+            } else {
+                None
+            }
+        }
+        as_x_result!($name_result, $name, $type);
+    };
+    ($name:ident, $name_result:ident, $variant:ident, $type:ty, $adjust:tt) => {
+        #[doc = concat!("Attempts to retrieve [DatumAtom::", stringify!($variant), "], else [None].")]
+        fn $name(&self) -> Option<$type> {
+            if let Some(DatumAtom::$variant(res)) = self.as_atom() {
+                Some($adjust res)
+            } else {
+                None
+            }
+        }
+        as_x_result!($name_result, $name, $type);
+    };
+}
+
 /// Implemented by structs which may contain an Atom to give easy access to said Atom.
 pub trait DatumMayContainAtom<B: Deref<Target = str>> {
     /// Retrieves a reference to the possible interior [DatumAtom].
     fn as_atom(&self) -> Option<&DatumAtom<B>>;
-    /// Retrieves a mutable reference to the possible interior [DatumAtom].
-    fn as_atom_mut(&mut self) -> Option<&mut DatumAtom<B>>;
-    /// From the interior [DatumAtom] (if any), retrieves the string (if it is), else [None].
-    fn as_str(&self) -> Option<&B> {
-        if let Some(DatumAtom::String(res)) = self.as_atom() {
-            Some(res)
-        } else {
-            None
-        }
-    }
-    /// From the interior [DatumAtom] (if any), retrieves the symbol (if it is), else [None].
-    fn as_id(&self) -> Option<&B> {
-        if let Some(DatumAtom::ID(res)) = self.as_atom() {
-            Some(res)
-        } else {
-            None
-        }
-    }
-    /// From the interior [DatumAtom] (if any), retrieves the int (if it is), else [None].
-    fn as_i64(&self) -> Option<i64> {
-        if let Some(DatumAtom::Integer(res)) = self.as_atom() {
-            Some(*res)
-        } else {
-            None
-        }
-    }
-    /// From the interior [DatumAtom] (if any), retrieves the float (if it is), else [None].
-    fn as_f64(&self) -> Option<f64> {
-        if let Some(DatumAtom::Float(res)) = self.as_atom() {
-            Some(*res)
-        } else {
-            None
-        }
-    }
+    as_x_result!(as_atom_result, as_atom, &DatumAtom<B>);
+    as_x!(as_str, as_str_result, String, &B);
+    as_x!(as_id, as_id_result, ID, &B);
+    as_x!(as_i64, as_i64_result, Integer, i64, *);
+    as_x!(as_f64, as_f64_result, Float, f64, *);
     /// From the interior [DatumAtom] (if any), retrieves the float (if it is), else [None].
     /// This version will cast integers to floats if necessary.
     fn as_number(&self) -> Option<f64> {
@@ -151,14 +153,8 @@ pub trait DatumMayContainAtom<B: Deref<Target = str>> {
             None
         }
     }
-    /// From the interior [DatumAtom] (if any), retrieves the boolean (if it is), else [None].
-    fn as_bool(&self) -> Option<bool> {
-        if let Some(DatumAtom::Boolean(res)) = self.as_atom() {
-            Some(*res)
-        } else {
-            None
-        }
-    }
+    as_x_result!(as_number_result, as_number, f64);
+    as_x!(as_bool, as_bool_result, Boolean, bool, *);
     /// From the interior [DatumAtom] (if any), returns [Some] if a nil value, else [None].
     fn as_nil(&self) -> Option<()> {
         if let Some(DatumAtom::Nil) = self.as_atom() {
@@ -167,14 +163,11 @@ pub trait DatumMayContainAtom<B: Deref<Target = str>> {
             None
         }
     }
+    as_x_result!(as_nil_result, as_nil, ());
 }
 
 impl<B: Deref<Target = str>> DatumMayContainAtom<B> for DatumAtom<B> {
     fn as_atom(&self) -> Option<&DatumAtom<B>> {
-        Some(self)
-    }
-
-    fn as_atom_mut(&mut self) -> Option<&mut DatumAtom<B>> {
         Some(self)
     }
 }
