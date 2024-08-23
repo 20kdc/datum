@@ -65,11 +65,9 @@ pub trait DatumPipe {
     type Input;
     type Output;
 
-    /// Feeds in I, and you may get up to the given amount of O.
-    fn feed<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, i: Self::Input, f: &mut F) -> DatumResult<()>;
-
-    /// EOF. May trigger errors.
-    fn eof<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, f: &mut F) -> DatumResult<()>;
+    /// Feeds in I, and you may some amount of O.
+    /// If None is passed, EOF happened.
+    fn feed<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, i: Option<Self::Input>, f: &mut F) -> DatumResult<()>;
 
     /// Feeds into a vec or similar from a slice.
     /// Can also automatically trigger EOF.
@@ -82,10 +80,10 @@ pub trait DatumPipe {
     /// ```
     fn feed_iter_to_vec<S: IntoIterator<Item = Self::Input>, V: Extend<Self::Output>>(&mut self, target: &mut V, source: S, eof: bool) -> DatumResult<()> {
         for v in source {
-            self.feed(v, &mut |o| { target.extend(Some(o)); Ok(()) })?;
+            self.feed(Some(v), &mut |o| { target.extend(Some(o)); Ok(()) })?;
         }
         if eof {
-            self.eof(&mut |o| { target.extend(Some(o)); Ok(()) })
+            self.feed(None, &mut |o| { target.extend(Some(o)); Ok(()) })
         } else {
             Ok(())
         }
@@ -105,17 +103,16 @@ impl<A: DatumPipe, B: DatumPipe<Input = A::Output>> DatumPipe for DatumComposePi
     type Input = A::Input;
     type Output = B::Output;
 
-    fn feed<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, i: Self::Input, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, i: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
         let m0 = &mut self.0;
         let m1 = &mut self.1;
-        m0.feed(i, &mut |v| m1.feed(v, f))
-    }
-
-    fn eof<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, f: &mut F) -> DatumResult<()> {
-        let m0 = &mut self.0;
-        let m1 = &mut self.1;
-        m0.eof(&mut |v| m1.feed(v, f))?;
-        m1.eof(f)
+        let was_none = i.is_none();
+        m0.feed(i, &mut |v| m1.feed(Some(v), f))?;
+        if was_none {
+            m1.feed(None, f)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -145,24 +142,14 @@ impl<I: Iterator<Item = S>, S, P: DatumPipe<Input = S>> Iterator for DatumPipeIt
             } else {
                 let base_res = self.iterator.next();
                 let buffer = &mut self.buffer;
-                match base_res {
-                    Some(base_res) => {
-                        if let Err(err) = self.pipeline.feed(base_res, &mut |v| {
-                            buffer.push_back(Ok(v));
-                            Ok(())
-                        }) {
-                            buffer.push_back(Err(err));
-                        }
-                    },
-                    None => {
-                        self.eof = true;
-                        if let Err(err) = self.pipeline.eof(&mut |v| {
-                            buffer.push_back(Ok(v));
-                            Ok(())
-                        }) {
-                            buffer.push_back(Err(err));
-                        }
-                    }
+                if base_res.is_none() {
+                    self.eof = true;
+                }
+                if let Err(err) = self.pipeline.feed(base_res, &mut |v| {
+                    buffer.push_back(Ok(v));
+                    Ok(())
+                }) {
+                    buffer.push_back(Err(err));
                 }
             }
         }

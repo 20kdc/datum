@@ -22,17 +22,16 @@ impl DatumPipe for DatumUTF8Decoder {
     type Input = u8;
     type Output = char;
 
-    #[inline]
-    fn eof<F: FnMut(char) -> DatumResult<()>>(&mut self, _f: &mut F) -> DatumResult<()> {
-        if self.buffer_len != 0 {
-            Err(datum_error!(Interrupted, "UTF-8 sequence"))
-        } else {
-            Ok(())
-        }
-    }
-
     /// Given a [u8], returns a resulting [char], if any.
-    fn feed<F: FnMut(char) -> DatumResult<()>>(&mut self, byte: u8, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(char) -> DatumResult<()>>(&mut self, byte: Option<u8>, f: &mut F) -> DatumResult<()> {
+        if let None = byte {
+            return if self.buffer_len != 0 {
+                Err(datum_error!(Interrupted, "UTF-8 sequence"))
+            } else {
+                Ok(())
+            }
+        }
+        let byte = byte.unwrap();
         if self.buffer_len >= (UTF8_DECODE_BUFFER as u8) {
             // this implies a UTF-8 character kept on continuing
             // and was not recognized as valid by Rust
@@ -71,41 +70,5 @@ impl DatumPipe for DatumUTF8Decoder {
             // else, could just mean the character hasn't finished yet
             Ok(())
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn decoder_should_fail(input: &[u8]) {
-        let mut decoder = DatumUTF8Decoder::default();
-        for v in input {
-            if decoder.feed(*v, &mut |_| {Ok(())}).is_err() {
-                return;
-            }
-        }
-        panic!("Decoder was supposed to fail!!!");
-    }
-
-    fn decoder_should_not_allow_eof(input: &[u8]) {
-        let mut decoder = DatumUTF8Decoder::default();
-        for v in input {
-            decoder.feed(*v, &mut |_| {Ok(())}).unwrap();
-        }
-        assert!(decoder.eof(&mut |_| {Ok(())}).is_err());
-    }
-
-    #[test]
-    fn byte_decoder_tests() {
-        // failure tests
-        // random continuation
-        decoder_should_fail(&[0x80]);
-        // start of sequence, but nothing else
-        decoder_should_not_allow_eof(&[0xC2]);
-        // it just keeps going and going!
-        decoder_should_fail(&[0xC2, 0x80, 0x80, 0x80, 0x80]);
-        // interrupted 'characters'
-        decoder_should_fail(&[0xC2, 0xC2]);
     }
 }

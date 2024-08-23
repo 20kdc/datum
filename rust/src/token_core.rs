@@ -56,7 +56,7 @@ pub enum DatumTokenizerAction {
 /// This API is a little harder to use, but allows complete control over buffer allocation/etc.
 /// In particular, it works with char classes, and expects you to keep track of bytes it sends your way with the [DatumTokenizerAction::Push] action.
 /// When a token is complete, you will receive the [DatumTokenizerAction::Token] action.
-/// You should also call [DatumTokenizer::eof] when relevant to get any token at the very end of the file.
+/// You should also call feed with [None] when relevant to get any token at the very end of the file.
 /// ```
 /// use datum_rs::{DatumDecoder, DatumPipe, DatumTokenizer, DatumTokenizerAction, DatumTokenType};
 /// let example = "some-symbol ; ignored comment";
@@ -67,9 +67,9 @@ pub enum DatumTokenizerAction {
 /// let mut token: [u8; 11] = [0; 11];
 /// let mut token_len: usize = 0;
 /// for b in example.chars() {
-///     decoder.feed(b, &mut |c| {
+///     decoder.feed(Some(b), &mut |c| {
 ///         // note the error from one stage can be passed to the previous
-///         tokenizer.feed(c.class(), &mut |a| {
+///         tokenizer.feed(Some(c.class()), &mut |a| {
 ///             match a {
 ///                 DatumTokenizerAction::Push => {
 ///                     token[token_len] = c.char() as u8;
@@ -89,8 +89,8 @@ pub enum DatumTokenizerAction {
 /// // At the end, you have to process EOF, etc.
 /// // If you're really in a rush, adding a single newline to the end should work
 /// // That said, if you do it, you keep the pieces (particularly re: unterminated strings!)
-/// decoder.eof(&mut |_| {Ok(())}).unwrap();
-/// tokenizer.eof(&mut |a| {
+/// decoder.feed(None, &mut |_| {Ok(())}).unwrap();
+/// tokenizer.feed(None, &mut |a| {
 ///     match a {
 ///         DatumTokenizerAction::Push => {},
 ///         DatumTokenizerAction::Token(tt) => {
@@ -119,36 +119,35 @@ impl DatumPipe for DatumTokenizer {
     type Input = DatumCharClass;
     type Output = DatumTokenizerAction;
 
-    /// Feeds an EOF to the tokenizer.
-    fn eof<F: FnMut(DatumTokenizerAction) -> DatumResult<()>>(&mut self, f: &mut F) -> DatumResult<()> {
-        self.0 = match self.0 {
-            DatumTokenizerState::Start => Ok(DatumTokenizerState::Start),
-            DatumTokenizerState::LineComment => Ok(DatumTokenizerState::Start),
-            DatumTokenizerState::String => {
-                Err(datum_error!(Interrupted, "mid-string eof"))
-            },
-            DatumTokenizerState::ID => {
-                f(DatumTokenizerAction::Token(DatumTokenType::ID))?;
-                Ok(DatumTokenizerState::Start)
-            },
-            DatumTokenizerState::NumericSign => {
-                f(DatumTokenizerAction::Token(DatumTokenType::ID))?;
-                Ok(DatumTokenizerState::Start)
-            },
-            DatumTokenizerState::Numeric => {
-                f(DatumTokenizerAction::Token(DatumTokenType::Numeric))?;
-                Ok(DatumTokenizerState::Start)
-            },
-            DatumTokenizerState::SpecialID => {
-                f(DatumTokenizerAction::Token(DatumTokenType::SpecialID))?;
-                Ok(DatumTokenizerState::Start)
-            }
-        }?;
-        Ok(())
-    }
-
     /// Given an incoming character class, returns the resulting actions.
-    fn feed<F: FnMut(DatumTokenizerAction) -> DatumResult<()>>(&mut self, class: DatumCharClass, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumTokenizerAction) -> DatumResult<()>>(&mut self, class: Option<DatumCharClass>, f: &mut F) -> DatumResult<()> {
+        if let None = class {
+            self.0 = match self.0 {
+                DatumTokenizerState::Start => Ok(DatumTokenizerState::Start),
+                DatumTokenizerState::LineComment => Ok(DatumTokenizerState::Start),
+                DatumTokenizerState::String => {
+                    Err(datum_error!(Interrupted, "mid-string eof"))
+                },
+                DatumTokenizerState::ID => {
+                    f(DatumTokenizerAction::Token(DatumTokenType::ID))?;
+                    Ok(DatumTokenizerState::Start)
+                },
+                DatumTokenizerState::NumericSign => {
+                    f(DatumTokenizerAction::Token(DatumTokenType::ID))?;
+                    Ok(DatumTokenizerState::Start)
+                },
+                DatumTokenizerState::Numeric => {
+                    f(DatumTokenizerAction::Token(DatumTokenType::Numeric))?;
+                    Ok(DatumTokenizerState::Start)
+                },
+                DatumTokenizerState::SpecialID => {
+                    f(DatumTokenizerAction::Token(DatumTokenType::SpecialID))?;
+                    Ok(DatumTokenizerState::Start)
+                }
+            }?;
+            return Ok(())
+        }
+        let class = class.unwrap();
         self.0 = match self.0 {
             DatumTokenizerState::Start => Self::start_feed(f, class),
             DatumTokenizerState::LineComment => {

@@ -28,7 +28,11 @@ impl DatumPipe for MyExampleParser {
 	type Input = char;
 	type Output = u8;
 
-	fn feed<F: FnMut(u8) -> DatumResult<()>>(&mut self, c: char, f: &mut F) -> DatumResult<()> {
+	fn feed<F: FnMut(u8) -> DatumResult<()>>(&mut self, c: Option<char>, f: &mut F) -> DatumResult<()> {
+		if let None = c {
+			return Ok(())
+		}
+		let c = c.unwrap();
 		if c == '+' {
 			self.0 = self.0.wrapping_add(1);
 			Ok(())
@@ -48,27 +52,24 @@ impl DatumPipe for MyExampleParser {
 			Ok(())
 		}
 	}
-
-	fn eof<F: FnMut(u8) -> DatumResult<()>>(&mut self, f: &mut F) -> DatumResult<()> {
-		// no issues with interruption in this language
-		Ok(())
-	}
 }
 
 let mut test = MyExampleParser(0);
 
 // we got some initial bytes...
-test.feed('!', &mut |_| Ok(())).unwrap();
-test.feed('!', &mut |_| Ok(())).unwrap();
-test.feed('+', &mut |_| Ok(())).unwrap();
+test.feed(Some('!'), &mut |_| Ok(())).unwrap();
+test.feed(Some('!'), &mut |_| Ok(())).unwrap();
+test.feed(Some('+'), &mut |_| Ok(())).unwrap();
 // (network socket ran out of data/etc...)
 // (...time passes...)
 // ...we got more data!
-test.feed('.', &mut |_| Ok(())).unwrap();
-test.feed('+', &mut |_| Ok(())).unwrap();
-test.feed('.', &mut |_| Ok(())).unwrap();
-test.feed('+', &mut |_| Ok(())).unwrap();
-test.feed('.', &mut |_| Ok(())).unwrap();
+test.feed(Some('.'), &mut |_| Ok(())).unwrap();
+test.feed(Some('+'), &mut |_| Ok(())).unwrap();
+test.feed(Some('.'), &mut |_| Ok(())).unwrap();
+test.feed(Some('+'), &mut |_| Ok(())).unwrap();
+test.feed(Some('.'), &mut |_| Ok(())).unwrap();
+// Socket closed.
+test.feed(None, &mut |_| Ok(())).unwrap();
 ```
 
 Now, this parser is pretty absurd, but it goes over the basic principles of the `DatumPipe` API:

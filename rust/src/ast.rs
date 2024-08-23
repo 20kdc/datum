@@ -106,7 +106,15 @@ impl DatumPipe for DatumParser {
     type Input = DatumToken<String>;
     type Output = DatumValue;
 
-    fn feed<F: FnMut(DatumValue) -> DatumResult<()>>(&mut self, token: Self::Input, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumValue) -> DatumResult<()>>(&mut self, token: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
+        if let None = token {
+            return if !self.stack.is_empty() {
+                Err(datum_error!(Interrupted, "eof inside list"))
+            } else {
+                Ok(())
+            }
+        }
+        let token = token.unwrap();
         match token.token_type() {
             DatumTokenType::ListStart => {
                 let list = Vec::new();
@@ -125,15 +133,6 @@ impl DatumPipe for DatumParser {
                 Err(e) => Err(e),
                 Ok(v) => self.feed_value(DatumValue::Atom(v), f),
             }
-        }
-    }
-
-    /// Sets the error flag if the parser is in the middle of a value.
-    fn eof<F: FnMut(DatumValue) -> DatumResult<()>>(&mut self, _f: &mut F) -> DatumResult<()> {
-        if !self.stack.is_empty() {
-            Err(datum_error!(Interrupted, "eof inside list"))
-        } else {
-            Ok(())
         }
     }
 }
