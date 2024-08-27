@@ -47,6 +47,7 @@ enum DatumTokenizerState {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DatumTokenizerAction {
     /// Push this character to buffer.
+    /// Pushes will always be contiguous.
     Push,
     /// Take token, then clear buffer.
     Token(DatumTokenType)

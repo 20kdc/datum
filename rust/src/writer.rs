@@ -68,14 +68,12 @@ impl DatumWriter {
     /// Writes a line comment. Newlines are converted into more line comments.
     pub fn write_comment(&mut self, f: &mut dyn Write, text: &str) -> core::fmt::Result {
         self.emit_whitespace(f, false)?;
-        f.write_char(';')?;
-        f.write_char(' ')?;
+        f.write_str("; ")?;
         for v in text.chars() {
             if v == '\n' {
                 self.write_newline(f)?;
                 self.emit_whitespace(f, false)?;
-                f.write_char(';')?;
-                f.write_char(' ')?;
+                f.write_str("; ")?;
             } else {
                 f.write_char(v)?;
             }

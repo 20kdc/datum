@@ -10,7 +10,7 @@ use core::{convert::TryFrom, fmt::{Display, Write}, ops::Deref};
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 
-use crate::{datum_error, DatumChar, DatumCharClass, DatumCharEmit, DatumError, DatumErrorKind, DatumPipe, DatumResult, DatumTokenType, DatumTokenizer, DatumTokenizerAction};
+use crate::{datum_error, DatumChar, DatumCharClass, DatumError, DatumErrorKind, DatumPipe, DatumResult, DatumTokenType, DatumTokenizer, DatumTokenizerAction};
 
 /// Datum token with integrated string.
 /// Notably, integer/float are stored as their values here to prevent unwritable values existing.
@@ -95,25 +95,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
             Self::String(b) => {
                 f.write_char('\"')?;
                 for v in b.deref().chars() {
-                    if v == '\\' {
-                        f.write_char('\\')?;
-                        f.write_char('\\')?;
-                    } else if v == '\r' {
-                        f.write_char('\\')?;
-                        f.write_char('r')?;
-                    } else if v == '\n' {
-                        f.write_char('\\')?;
-                        f.write_char('n')?;
-                    } else if v == '\t' {
-                        f.write_char('\\')?;
-                        f.write_char('t')?;
-                    } else if ('\x00'..='\x1F').contains(&v) || v == '\x7F' {
-                        for c in DatumCharEmit::make_byte_hex_escape(v as u8) {
-                            f.write_char(c)?;
-                        }
-                    } else {
-                        f.write_char(v)?;
-                    }
+                    DatumChar::string_content(v).write(f)?;
                 }
                 f.write_char('\"')
             },
@@ -142,10 +124,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                         core::fmt::Result::Ok(())
                     },
                     None => {
-                        f.write_char('#')?;
-                        f.write_char('{')?;
-                        f.write_char('}')?;
-                        f.write_char('#')
+                        f.write_str("#{}#")
                     }
                 }
             },
@@ -160,24 +139,24 @@ impl<B: Deref<Target = str>> DatumToken<B> {
             Self::Integer(v) => core::fmt::write(f, format_args!("{}", v)),
             Self::Float(v) => {
                 if v.is_nan() {
-                    f.write_str("#i+nan.0")?;
+                    f.write_str("#i+nan.0")
                 } else if v.is_infinite() {
                     if v.is_sign_positive() {
-                        f.write_str("#i+inf.0")?;
+                        f.write_str("#i+inf.0")
                     } else {
-                        f.write_str("#i-inf.0")?;
+                        f.write_str("#i-inf.0")
                     }
                 } else {
                     // In my defense, it was this or relying on {:?} to be stable.
                     // This is merely cursed. That is basically asking for version breakage.
                     let mut res = DatumFloatObserver(f, false);
-                    core::fmt::write(&mut res, format_args!("{:?}", v))?;
+                    core::fmt::write(&mut res, format_args!("{}", v))?;
                     if !res.1 {
                         // Nothing indicating this is a float, append .0
                         f.write_str(".0")?;
                     }
+                    core::fmt::Result::Ok(())
                 }
-                core::fmt::Result::Ok(())
             },
             Self::ListStart => f.write_char('('),
             Self::ListEnd => f.write_char(')')

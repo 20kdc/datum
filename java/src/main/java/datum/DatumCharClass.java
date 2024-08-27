@@ -46,27 +46,28 @@ public enum DatumCharClass {
     }
 
     public static DatumCharClass identify(char c) {
-        if (c == 10) {
+        if (c == '\n') {
             return Newline;
-        } else if (c == 9 || c == 10 || c == 32) {
+        } else if (c == '\t' || c == ' ') {
             return Whitespace;
-        } else if (c < 32 || c == 127 || c == '\\') {
+        } else if (c < ' ' || c == 127 || c == '\\') {
             return Meta;
-        }
-        if (c == ';')
+        } else if (c == ';') {
             return LineComment;
-        if (c == '"')
+        } else if (c == '"') {
             return String;
-        if (c == '(')
+        } else if (c == '(') {
             return ListStart;
-        if (c == ')')
+        } else if (c == ')') {
             return ListEnd;
-        if (c == '#')
+        } else if (c == '#') {
             return SpecialID;
-        if (c == '-')
+        } else if (c == '-') {
             return Sign;
-        if (c >= '0' && c <= '9')
+        } else if (c >= '0' && c <= '9') {
             return Digit;
-        return Content;
+        } else {
+            return Content;
+        }
     }
 }
