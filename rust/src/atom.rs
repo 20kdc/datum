@@ -7,11 +7,12 @@
 
 use core::{convert::TryFrom, fmt::{Display, Write}, ops::Deref};
 
-use crate::{datum_error, DatumError, DatumErrorKind, DatumResult, DatumToken};
+use crate::{datum_error, DatumError, DatumResult, DatumToken};
 
 /// Atomic Datum AST value.
 /// This enum also contains the functions that convert between tokens and atoms.
 /// You can think of it as the bridge between Datum's tokenization model and value model.
+/// Accordingly, it does not contain offsets.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Debug, Default)]
 pub enum DatumAtom<B: Deref<Target = str>> {
     String(B),
@@ -30,9 +31,9 @@ impl<B: Default + Deref<Target = str>> TryFrom<DatumToken<B>> for DatumAtom<B> {
     /// Due to the strings involved, this has to be done via ownership transfer.
     fn try_from(token: DatumToken<B>) -> DatumResult<DatumAtom<B>> {
         match token {
-            DatumToken::String(b) => Ok(DatumAtom::String(b)),
-            DatumToken::ID(b) => Ok(DatumAtom::ID(b)),
-            DatumToken::SpecialID(b) => {
+            DatumToken::String(_, b) => Ok(DatumAtom::String(b)),
+            DatumToken::ID(_, b) => Ok(DatumAtom::ID(b)),
+            DatumToken::SpecialID(at, b) => {
                 if b.eq_ignore_ascii_case("t") {
                     Ok(DatumAtom::Boolean(true))
                 } else if b.eq_ignore_ascii_case("f") {
@@ -52,15 +53,15 @@ impl<B: Default + Deref<Target = str>> TryFrom<DatumToken<B>> for DatumAtom<B> {
                     if let Ok(v) = res {
                         Ok(DatumAtom::Integer(v))
                     } else {
-                        Err(datum_error!(BadData, "invalid hex integer"))
+                        Err(datum_error!(BadData, at, "invalid hex integer"))
                     }
                 } else {
-                    Err(datum_error!(BadData, "invalid special ID"))
+                    Err(datum_error!(BadData, at, "invalid special ID"))
                 }
             },
-            DatumToken::Integer(v) => Ok(DatumAtom::Integer(v)),
-            DatumToken::Float(v) => Ok(DatumAtom::Float(v)),
-            _ => Err(datum_error!(BadData, "token not atomizable"))
+            DatumToken::Integer(_, v) => Ok(DatumAtom::Integer(v)),
+            DatumToken::Float(_, v) => Ok(DatumAtom::Float(v)),
+            _ => Err(datum_error!(BadData, token.offset(), "token not atomizable"))
         }
     }
 }
@@ -69,14 +70,14 @@ impl<B: Deref<Target = str>> DatumAtom<B> {
     /// Writes a value from the atom.
     pub fn write(&self, f: &mut dyn Write) -> core::fmt::Result {
         match &self {
-            DatumAtom::String(v) => DatumToken::String(v.deref()).write(f),
-            DatumAtom::ID(v) => DatumToken::ID(v.deref()).write(f),
+            DatumAtom::String(v) => DatumToken::String(0, v.deref()).write(f),
+            DatumAtom::ID(v) => DatumToken::ID(0, v.deref()).write(f),
             DatumAtom::Integer(v) => {
-                let v: DatumToken<&'static str> = DatumToken::Integer(*v);
+                let v: DatumToken<&'static str> = DatumToken::Integer(0, *v);
                 v.write(f)
             },
             DatumAtom::Float(v) => {
-                let v: DatumToken<&'static str> = DatumToken::Float(*v);
+                let v: DatumToken<&'static str> = DatumToken::Float(0, *v);
                 v.write(f)
             },
             DatumAtom::Boolean(true) => f.write_str("#t"),

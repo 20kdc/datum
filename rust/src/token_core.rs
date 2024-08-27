@@ -5,7 +5,7 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use crate::{datum_error, DatumError, DatumErrorKind, DatumCharClass, DatumPipe, DatumResult};
+use crate::{datum_error, DatumCharClass, DatumError, DatumOffset, DatumPipe, DatumResult};
 
 /// Datum token type.
 /// This is paired with the token contents, if any.
@@ -33,14 +33,8 @@ enum DatumTokenizerState {
     LineComment,
     /// string block, not_"
     String,
-    /// potential identifier block, content_class
-    ID,
-    /// potential identifier block, sign_class
-    NumericSign,
-    /// potential identifier block, digit_class
-    Numeric,
-    /// potential identifier block
-    SpecialID
+    /// potential identifier block (immediate, if-expanded)
+    PotentialIdentifier(DatumTokenType, DatumTokenType),
 }
 
 /// Action output by the tokenizer.
@@ -68,9 +62,9 @@ pub enum DatumTokenizerAction {
 /// let mut token: [u8; 11] = [0; 11];
 /// let mut token_len: usize = 0;
 /// for b in example.chars() {
-///     decoder.feed(Some(b), &mut |c| {
+///     decoder.feed(0, Some(b), &mut |c| {
 ///         // note the error from one stage can be passed to the previous
-///         tokenizer.feed(Some(c.class()), &mut |a| {
+///         tokenizer.feed(0, Some(c.class()), &mut |a| {
 ///             match a {
 ///                 DatumTokenizerAction::Push => {
 ///                     token[token_len] = c.char() as u8;
@@ -90,8 +84,8 @@ pub enum DatumTokenizerAction {
 /// // At the end, you have to process EOF, etc.
 /// // If you're really in a rush, adding a single newline to the end should work
 /// // That said, if you do it, you keep the pieces (particularly re: unterminated strings!)
-/// decoder.feed(None, &mut |_| {Ok(())}).unwrap();
-/// tokenizer.feed(None, &mut |a| {
+/// decoder.feed(0, None, &mut |_| {Ok(())}).unwrap();
+/// tokenizer.feed(0, None, &mut |a| {
 ///     match a {
 ///         DatumTokenizerAction::Push => {},
 ///         DatumTokenizerAction::Token(tt) => {
@@ -121,28 +115,14 @@ impl DatumPipe for DatumTokenizer {
     type Output = DatumTokenizerAction;
 
     /// Given an incoming character class, returns the resulting actions.
-    fn feed<F: FnMut(DatumTokenizerAction) -> DatumResult<()>>(&mut self, class: Option<DatumCharClass>, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumTokenizerAction) -> DatumResult<()>>(&mut self, at: DatumOffset, class: Option<DatumCharClass>, f: &mut F) -> DatumResult<()> {
         if let None = class {
             self.0 = match self.0 {
                 DatumTokenizerState::Start => Ok(DatumTokenizerState::Start),
                 DatumTokenizerState::LineComment => Ok(DatumTokenizerState::Start),
-                DatumTokenizerState::String => {
-                    Err(datum_error!(Interrupted, "mid-string eof"))
-                },
-                DatumTokenizerState::ID => {
-                    f(DatumTokenizerAction::Token(DatumTokenType::ID))?;
-                    Ok(DatumTokenizerState::Start)
-                },
-                DatumTokenizerState::NumericSign => {
-                    f(DatumTokenizerAction::Token(DatumTokenType::ID))?;
-                    Ok(DatumTokenizerState::Start)
-                },
-                DatumTokenizerState::Numeric => {
-                    f(DatumTokenizerAction::Token(DatumTokenType::Numeric))?;
-                    Ok(DatumTokenizerState::Start)
-                },
-                DatumTokenizerState::SpecialID => {
-                    f(DatumTokenizerAction::Token(DatumTokenType::SpecialID))?;
+                DatumTokenizerState::String => Err(datum_error!(Interrupted, at, "mid-string eof")),
+                DatumTokenizerState::PotentialIdentifier(immediate, _) => {
+                    f(DatumTokenizerAction::Token(immediate))?;
                     Ok(DatumTokenizerState::Start)
                 }
             }?;
@@ -167,44 +147,15 @@ impl DatumPipe for DatumTokenizer {
                     Ok(DatumTokenizerState::String)
                 }
             },
-            DatumTokenizerState::ID => {
+            DatumTokenizerState::PotentialIdentifier(immediate, expanded) => {
                 if class.potential_identifier() {
                     f(DatumTokenizerAction::Push)?;
-                    Ok(DatumTokenizerState::ID)
+                    Ok(DatumTokenizerState::PotentialIdentifier(expanded, expanded))
                 } else {
-                    f(DatumTokenizerAction::Token(DatumTokenType::ID))?;
+                    f(DatumTokenizerAction::Token(immediate))?;
                     Self::start_feed(f, class)
                 }
             },
-            DatumTokenizerState::NumericSign => {
-                if class.potential_identifier() {
-                    f(DatumTokenizerAction::Push)?;
-                    Ok(DatumTokenizerState::Numeric)
-                } else {
-                    // just a sign, so interpret as ID
-                    f(DatumTokenizerAction::Token(DatumTokenType::ID))?;
-                    Self::start_feed(f, class)
-                }
-            },
-            DatumTokenizerState::Numeric => {
-                if class.potential_identifier() {
-                    f(DatumTokenizerAction::Push)?;
-                    Ok(DatumTokenizerState::Numeric)
-                } else {
-                    // if just "-", an ID, else numeric
-                    f(DatumTokenizerAction::Token(DatumTokenType::Numeric))?;
-                    Self::start_feed(f, class)
-                }
-            },
-            DatumTokenizerState::SpecialID => {
-                if class.potential_identifier() {
-                    f(DatumTokenizerAction::Push)?;
-                    Ok(DatumTokenizerState::SpecialID)
-                } else {
-                    f(DatumTokenizerAction::Token(DatumTokenType::SpecialID))?;
-                    Self::start_feed(f, class)
-                }
-            }
         }?;
         Ok(())
     }
@@ -217,7 +168,7 @@ impl DatumTokenizer {
         match class {
             DatumCharClass::Content => {
                 f(DatumTokenizerAction::Push)?;
-                Ok(DatumTokenizerState::ID)
+                Ok(DatumTokenizerState::PotentialIdentifier(DatumTokenType::ID, DatumTokenType::ID))
             },
             DatumCharClass::Whitespace => Ok(DatumTokenizerState::Start),
             DatumCharClass::Newline => Ok(DatumTokenizerState::Start),
@@ -232,15 +183,15 @@ impl DatumTokenizer {
                 Ok(DatumTokenizerState::Start)
             },
             DatumCharClass::SpecialID => {
-                Ok(DatumTokenizerState::SpecialID)
+                Ok(DatumTokenizerState::PotentialIdentifier(DatumTokenType::SpecialID, DatumTokenType::SpecialID))
             },
             DatumCharClass::Sign => {
                 f(DatumTokenizerAction::Push)?;
-                Ok(DatumTokenizerState::NumericSign)
+                Ok(DatumTokenizerState::PotentialIdentifier(DatumTokenType::ID, DatumTokenType::Numeric))
             },
             DatumCharClass::Digit => {
                 f(DatumTokenizerAction::Push)?;
-                Ok(DatumTokenizerState::Numeric)
+                Ok(DatumTokenizerState::PotentialIdentifier(DatumTokenType::Numeric, DatumTokenType::Numeric))
             },
         }
     }

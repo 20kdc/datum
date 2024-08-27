@@ -23,7 +23,6 @@ Implementations exist for:
 
 ## TODO
 
-* Figure out datum-rs source positioning
 * Figure out how to make doctests that rely on alloc while not being for alloc functions?
 * Go over datum-rs with a fine-toothed comb
 * Do the libraries need to go on a diet?

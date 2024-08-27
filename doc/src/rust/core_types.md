@@ -20,7 +20,7 @@ For instance, consider the following parser:
 
 ```rust
 # extern crate datum_rs;
-# use datum_rs::{DatumPipe, DatumResult};
+# use datum_rs::{DatumPipe, DatumResult, DatumOffset};
 
 struct MyExampleParser(u8);
 
@@ -28,7 +28,7 @@ impl DatumPipe for MyExampleParser {
 	type Input = char;
 	type Output = u8;
 
-	fn feed<F: FnMut(u8) -> DatumResult<()>>(&mut self, c: Option<char>, f: &mut F) -> DatumResult<()> {
+	fn feed<F: FnMut(u8) -> DatumResult<()>>(&mut self, _at: DatumOffset, c: Option<char>, f: &mut F) -> DatumResult<()> {
 		if let None = c {
 			return Ok(())
 		}
@@ -57,27 +57,28 @@ impl DatumPipe for MyExampleParser {
 let mut test = MyExampleParser(0);
 
 // we got some initial bytes...
-test.feed(Some('!'), &mut |_| Ok(())).unwrap();
-test.feed(Some('!'), &mut |_| Ok(())).unwrap();
-test.feed(Some('+'), &mut |_| Ok(())).unwrap();
+test.feed(0, Some('!'), &mut |_| Ok(())).unwrap();
+test.feed(0, Some('!'), &mut |_| Ok(())).unwrap();
+test.feed(0, Some('+'), &mut |_| Ok(())).unwrap();
 // (network socket ran out of data/etc...)
 // (...time passes...)
 // ...we got more data!
-test.feed(Some('.'), &mut |_| Ok(())).unwrap();
-test.feed(Some('+'), &mut |_| Ok(())).unwrap();
-test.feed(Some('.'), &mut |_| Ok(())).unwrap();
-test.feed(Some('+'), &mut |_| Ok(())).unwrap();
-test.feed(Some('.'), &mut |_| Ok(())).unwrap();
+test.feed(0, Some('.'), &mut |_| Ok(())).unwrap();
+test.feed(0, Some('+'), &mut |_| Ok(())).unwrap();
+test.feed(0, Some('.'), &mut |_| Ok(())).unwrap();
+test.feed(0, Some('+'), &mut |_| Ok(())).unwrap();
+test.feed(0, Some('.'), &mut |_| Ok(())).unwrap();
 // Socket closed.
-test.feed(None, &mut |_| Ok(())).unwrap();
+test.feed(0, None, &mut |_| Ok(())).unwrap();
 ```
 
 Now, this parser is pretty absurd, but it goes over the basic principles of the `DatumPipe` API:
 
 * Implementations can input and return whatever types they like, though they always use `DatumError`.
+* Semi-opaque `u64` 'offsets' are passed through (useful for error handling).
 * Implementations may return multiple results from a single call using the closure provided.
 * The closure can itself return errors.
-* Implementations may catch stream interruption using the `eof` handler.
+* EOF is represented as a final `None` value.
 
 The main advantage here comes from the ability to asynchronously handle data without using async.
 

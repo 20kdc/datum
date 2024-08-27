@@ -51,7 +51,7 @@ fn tokenizer_should_error_eof(input: &str) {
     let mut dectok1 = datum_char_to_token_pipeline();
     let mut ignoredout = Vec::new();
     dectok1.feed_iter_to_vec(&mut ignoredout, input.chars(), false).unwrap();
-    assert!(dectok1.feed(None, &mut |_| {Ok(())}).is_err());
+    assert!(dectok1.feed(0, None, &mut |_| {Ok(())}).is_err());
 }
 
 fn parser_should_error(input: &str) {
@@ -63,19 +63,19 @@ fn parser_should_error(input: &str) {
 
 #[test]
 fn test_token_write() {
-    assert_eq!(&DatumToken::String("Test\\\r\n\t").to_string(), "\"Test\\\\\\r\\n\\t\"");
-    assert_eq!(&DatumToken::ID("").to_string(), "#{}#");
-    assert_eq!(&DatumToken::ID("test").to_string(), "test");
-    assert_eq!(&DatumToken::SpecialID("test").to_string(), "#test");
-    let flt: DatumToken<&'static str> = DatumToken::Float(-1.0);
+    assert_eq!(&DatumToken::String(0, "Test\\\r\n\t").to_string(), "\"Test\\\\\\r\\n\\t\"");
+    assert_eq!(&DatumToken::ID(0, "").to_string(), "#{}#");
+    assert_eq!(&DatumToken::ID(0, "test").to_string(), "test");
+    assert_eq!(&DatumToken::SpecialID(0, "test").to_string(), "#test");
+    let flt: DatumToken<&'static str> = DatumToken::Float(0, -1.0);
     assert_eq!(&flt.to_string(), "-1.0");
     // make sure above wasn't implemented via rounding or something
-    let flt: DatumToken<&'static str> = DatumToken::Float(-1.07915331907856);
+    let flt: DatumToken<&'static str> = DatumToken::Float(0, -1.07915331907856);
     assert_eq!(&flt.to_string(), "-1.07915331907856");
-    let int: DatumToken<&'static str> = DatumToken::Integer(1);
+    let int: DatumToken<&'static str> = DatumToken::Integer(0, 1);
     assert_eq!(&int.to_string(), "1");
-    let ls: DatumToken<&'static str> = DatumToken::ListStart;
-    let le: DatumToken<&'static str> = DatumToken::ListEnd;
+    let ls: DatumToken<&'static str> = DatumToken::ListStart(0);
+    let le: DatumToken<&'static str> = DatumToken::ListEnd(0);
     assert_eq!(&ls.to_string(), "(");
     assert_eq!(&le.to_string(), ")");
 }
@@ -118,20 +118,20 @@ fn decoder_test(input: &str, output: &str, out_class: DatumCharClass) {
     let mut decoder = DatumDecoder::default();
     let mut output_iterator = output.chars();
     for v in input.chars() {
-        decoder.feed(Some(v), &mut |c| {
+        decoder.feed(0, Some(v), &mut |c| {
             assert_eq!(c.char(), output_iterator.next().expect("early output end"));
             assert_eq!(c.class(), out_class);
             Ok(())
         }).unwrap();
     }
-    decoder.feed(None, &mut |_| {Ok(())}).unwrap();
+    decoder.feed(0, None, &mut |_| {Ok(())}).unwrap();
     assert_eq!(output_iterator.next(), None);
 }
 
 fn decoder_should_fail(input: &str) {
     let mut decoder = DatumDecoder::default();
     for v in input.chars() {
-        let res = decoder.feed(Some(v), &mut |_| {Ok(())});
+        let res = decoder.feed(0, Some(v), &mut |_| {Ok(())});
         if let Err(_) = res {
             return;
         }
@@ -142,22 +142,22 @@ fn decoder_should_fail(input: &str) {
 fn decoder_should_not_allow_eof(input: &str) {
     let mut decoder = DatumDecoder::default();
     for v in input.chars() {
-        decoder.feed(Some(v), &mut |_| {Ok(())}).unwrap();
+        decoder.feed(0, Some(v), &mut |_| {Ok(())}).unwrap();
     }
-    assert!(decoder.feed(None, &mut |_| {Ok(())}).is_err());
+    assert!(decoder.feed(0, None, &mut |_| {Ok(())}).is_err());
 }
 
 #[test]
 fn decoder_results_test() {
     let mut decoder = DatumDecoder::default();
-    decoder.feed(Some('\\'), &mut |_| {panic!("NO")}).unwrap();
-    decoder.feed(Some('x'), &mut |_| {panic!("NO")}).unwrap();
-    decoder.feed(Some('1'), &mut |_| {panic!("NO")}).unwrap();
-    decoder.feed(Some('0'), &mut |_| {panic!("NO")}).unwrap();
-    decoder.feed(Some('F'), &mut |_| {panic!("NO")}).unwrap();
-    decoder.feed(Some('F'), &mut |_| {panic!("NO")}).unwrap();
-    decoder.feed(Some('F'), &mut |_| {panic!("NO")}).unwrap();
-    decoder.feed(Some('F'), &mut |_| {panic!("NO")}).unwrap();
+    decoder.feed(0, Some('\\'), &mut |_| {panic!("NO")}).unwrap();
+    decoder.feed(0, Some('x'), &mut |_| {panic!("NO")}).unwrap();
+    decoder.feed(0, Some('1'), &mut |_| {panic!("NO")}).unwrap();
+    decoder.feed(0, Some('0'), &mut |_| {panic!("NO")}).unwrap();
+    decoder.feed(0, Some('F'), &mut |_| {panic!("NO")}).unwrap();
+    decoder.feed(0, Some('F'), &mut |_| {panic!("NO")}).unwrap();
+    decoder.feed(0, Some('F'), &mut |_| {panic!("NO")}).unwrap();
+    decoder.feed(0, Some('F'), &mut |_| {panic!("NO")}).unwrap();
     let out = [DatumChar::content('\u{10FFFF}' as char), DatumChar::content('a' as char)];
     let mut tmp = Vec::new();
     decoder.feed_iter_to_vec(&mut tmp, [';', 'a'], true).unwrap();
@@ -200,7 +200,7 @@ fn all_decoder_test_cases() {
 fn byte_decoder_should_fail(input: &[u8]) {
     let mut decoder = DatumUTF8Decoder::default();
     for v in input {
-        if decoder.feed(Some(*v), &mut |_| {Ok(())}).is_err() {
+        if decoder.feed(0, Some(*v), &mut |_| {Ok(())}).is_err() {
             return;
         }
     }
@@ -210,9 +210,9 @@ fn byte_decoder_should_fail(input: &[u8]) {
 fn byte_decoder_should_not_allow_eof(input: &[u8]) {
     let mut decoder = DatumUTF8Decoder::default();
     for v in input {
-        decoder.feed(Some(*v), &mut |_| {Ok(())}).unwrap();
+        decoder.feed(0, Some(*v), &mut |_| {Ok(())}).unwrap();
     }
-    assert!(decoder.feed(None, &mut |_| {Ok(())}).is_err());
+    assert!(decoder.feed(0, None, &mut |_| {Ok(())}).is_err());
 }
 
 #[test]

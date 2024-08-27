@@ -5,7 +5,7 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use crate::{datum_error, DatumError, DatumErrorKind, DatumPipe, DatumResult};
+use crate::{datum_error, DatumError, DatumOffset, DatumPipe, DatumResult};
 
 const UTF8_DECODE_BUFFER: usize = 4;
 
@@ -23,10 +23,10 @@ impl DatumPipe for DatumUTF8Decoder {
     type Output = char;
 
     /// Given a [u8], returns a resulting [char], if any.
-    fn feed<F: FnMut(char) -> DatumResult<()>>(&mut self, byte: Option<u8>, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(char) -> DatumResult<()>>(&mut self, at: DatumOffset, byte: Option<u8>, f: &mut F) -> DatumResult<()> {
         if let None = byte {
             return if self.buffer_len != 0 {
-                Err(datum_error!(Interrupted, "UTF-8 sequence"))
+                Err(datum_error!(Interrupted, at, "UTF-8 sequence"))
             } else {
                 Ok(())
             }
@@ -35,7 +35,7 @@ impl DatumPipe for DatumUTF8Decoder {
         if self.buffer_len >= (UTF8_DECODE_BUFFER as u8) {
             // this implies a UTF-8 character kept on continuing
             // and was not recognized as valid by Rust
-            Err(datum_error!(BadData, "overlong UTF-8 sequence"))
+            Err(datum_error!(BadData, at, "overlong UTF-8 sequence"))
         } else if self.buffer_len == 0 {
             // first char of sequence, use special handling to catch errors early
             if byte <= 127 {
@@ -43,7 +43,7 @@ impl DatumPipe for DatumUTF8Decoder {
                 f(byte as char)
             } else if (0x80..=0xBF).contains(&byte) {
                 // can't start a sequence with a continuation
-                Err(datum_error!(BadData, "continuation at start"))
+                Err(datum_error!(BadData, at, "continuation at start"))
             } else {
                 // start bytes of multi-byte sequences
                 self.buffer[0] = byte;
@@ -53,7 +53,7 @@ impl DatumPipe for DatumUTF8Decoder {
         } else if !(0x80..=0xBF).contains(&byte) {
             // we're supposed to be adding continuations and suddenly this shows up?
             // (this path also catches if a character comes in that looks fine at a glance but from_utf8 doesn't like)
-            Err(datum_error!(BadData, "mid-sequence start"))
+            Err(datum_error!(BadData, at, "mid-sequence start"))
         } else {
             self.buffer[self.buffer_len as usize] = byte;
             self.buffer_len += 1;

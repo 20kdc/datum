@@ -36,7 +36,7 @@ use core::fmt::{Debug, Display};
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::{datum_error, DatumAtom, DatumError, DatumErrorKind, DatumMayContainAtom, DatumPipe, DatumResult, DatumToken, DatumTokenType, DatumWriter};
+use crate::{datum_error, DatumAtom, DatumError, DatumMayContainAtom, DatumOffset, DatumPipe, DatumResult, DatumToken, DatumTokenType, DatumWriter};
 
 /// Datum AST node / value.
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
@@ -60,8 +60,8 @@ impl DatumValue {
         match self {
             DatumValue::Atom(v) => writer.write_atom(f, v),
             DatumValue::List(v) => {
-                let ls: DatumToken<&str> = DatumToken::ListStart;
-                let le: DatumToken<&str> = DatumToken::ListEnd;
+                let ls: DatumToken<&str> = DatumToken::ListStart(0);
+                let le: DatumToken<&str> = DatumToken::ListEnd(0);
                 writer.write_token(f, &ls)?;
                 for e in v {
                     e.write_to(f, writer)?;
@@ -106,10 +106,10 @@ impl DatumPipe for DatumParser {
     type Input = DatumToken<String>;
     type Output = DatumValue;
 
-    fn feed<F: FnMut(DatumValue) -> DatumResult<()>>(&mut self, token: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumValue) -> DatumResult<()>>(&mut self, at: DatumOffset, token: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
         if let None = token {
             return if !self.stack.is_empty() {
-                Err(datum_error!(Interrupted, "eof inside list"))
+                Err(datum_error!(Interrupted, at, "eof inside list"))
             } else {
                 Ok(())
             }
@@ -126,7 +126,7 @@ impl DatumPipe for DatumParser {
                 if let Some(v) = res {
                     self.feed_value(DatumValue::List(v), f)
                 } else {
-                    Err(datum_error!(BadData, "end of list while not in list"))
+                    Err(datum_error!(BadData, at, "end of list while not in list"))
                 }
             },
             _ => match DatumAtom::try_from(token) {
