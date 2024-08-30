@@ -24,13 +24,18 @@ impl DatumPipe for DatumUTF8Decoder {
     type Output = char;
 
     /// Given a [u8], returns a resulting [char], if any.
-    fn feed<F: FnMut(DatumOffset, char) -> DatumResult<()>>(&mut self, at: DatumOffset, byte: Option<u8>, f: &mut F) -> DatumResult<()> {
-        if let None = byte {
+    fn feed<F: FnMut(DatumOffset, char) -> DatumResult<()>>(
+        &mut self,
+        at: DatumOffset,
+        byte: Option<u8>,
+        f: &mut F,
+    ) -> DatumResult<()> {
+        if byte.is_none() {
             return if self.buffer_len != 0 {
                 Err(datum_error!(Interrupted, at, "UTF-8 sequence"))
             } else {
                 Ok(())
-            }
+            };
         }
         let byte = byte.unwrap();
         if self.buffer_len >= (UTF8_DECODE_BUFFER as u8) {

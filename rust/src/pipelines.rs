@@ -7,21 +7,24 @@
 
 use alloc::string::String;
 
-use crate::{DatumComposePipe, DatumDecoder, DatumParser, DatumPipe, DatumStringTokenizer, DatumToken, DatumUTF8Decoder, DatumValue};
+use crate::{
+    DatumComposePipe, DatumDecoder, DatumParser, DatumPipe, DatumStringTokenizer, DatumToken,
+    DatumUTF8Decoder, DatumValue,
+};
 
 // -- token outputting --
 
 /// Byte to token parsing pipeline.
 pub fn datum_byte_to_token_pipeline() -> impl DatumPipe<Input = u8, Output = DatumToken<String>> {
     let utf2chr = DatumComposePipe(DatumUTF8Decoder::default(), DatumDecoder::default());
-    let dtparse = DatumComposePipe(utf2chr, DatumStringTokenizer::default());
-    dtparse
+    
+    DatumComposePipe(utf2chr, DatumStringTokenizer::default())
 }
 
 /// Character to token parsing pipeline.
 pub fn datum_char_to_token_pipeline() -> impl DatumPipe<Input = char, Output = DatumToken<String>> {
-    let dectok = DatumComposePipe(DatumDecoder::default(), DatumStringTokenizer::default());
-    dectok
+    
+    DatumComposePipe(DatumDecoder::default(), DatumStringTokenizer::default())
 }
 
 // -- value outputting --
@@ -29,13 +32,13 @@ pub fn datum_char_to_token_pipeline() -> impl DatumPipe<Input = char, Output = D
 /// Byte to value parsing pipeline.
 pub fn datum_byte_to_value_pipeline() -> impl DatumPipe<Input = u8, Output = DatumValue> {
     let tokenizer = datum_byte_to_token_pipeline();
-    let dtparse = DatumComposePipe(tokenizer, DatumParser::default());
-    dtparse
+    
+    DatumComposePipe(tokenizer, DatumParser::default())
 }
 
 /// Char to value parsing pipeline.
 pub fn datum_char_to_value_pipeline() -> impl DatumPipe<Input = char, Output = DatumValue> {
     let tokenizer = datum_char_to_token_pipeline();
-    let dtparse = DatumComposePipe(tokenizer, DatumParser::default());
-    dtparse
+    
+    DatumComposePipe(tokenizer, DatumParser::default())
 }

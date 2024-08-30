@@ -4,7 +4,7 @@
 
 ## DatumError
 
-`DatumError` is the error type for all errors produced by `datum_rs`.
+`DatumError` is the error type for all errors produced by the `datum` crate.
 
 It is paired with the `datum_error!(kind, message)` macro, which is divided into a machine-friendly broad type (which should be version-stable) and a human-friendly fine type (not so version-stable).
 
@@ -12,15 +12,15 @@ It is paired with the `datum_error!(kind, message)` macro, which is divided into
 
 ## DatumPipe
 
-`DatumPipe` is `datum_rs`'s way of providing a "push API".
+`DatumPipe` is `datum`'s way of providing a "push API".
 
 Compared to "pull APIs" such as `Iterator`, push APIs are more flexible around async IO without actually being async.
 
 For instance, consider the following parser:
 
 ```rust
-# extern crate datum_rs;
-# use datum_rs::{DatumPipe, DatumResult, DatumOffset};
+# extern crate datum;
+# use datum::{DatumPipe, DatumResult, DatumOffset};
 
 struct MyExampleParser(u8);
 
@@ -101,8 +101,8 @@ Chances are, for any simple reading task, it will be enough to take the results 
 In fact, let's do something like that:
 
 ```rust
-# extern crate datum_rs;
-use datum_rs::{ViaDatumPipe, datum_char_to_value_pipeline};
+# extern crate datum;
+use datum::{IntoViaDatumPipe, datum_char_to_value_pipeline};
 let source = "(the quick brown fox) jumped (over (the lazy dog))";
 for v in source.chars().via_datum_pipe(datum_char_to_value_pipeline()).map(|v| v.expect("the input should be valid")) {
 	println!("{}", v);

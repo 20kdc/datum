@@ -1,6 +1,6 @@
 [package]
-name = "datum-rs"
-version = "0.5.0"
+name = "datum"
+version = "0.9.0"
 description = "Terse, human-writable data format."
 repository = "https://github.com/20kdc/gabien-common/"
 license = "Unlicense"

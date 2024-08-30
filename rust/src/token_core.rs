@@ -5,7 +5,9 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use crate::{datum_error, DatumChar, DatumCharClass, DatumError, DatumOffset, DatumPipe, DatumResult};
+use crate::{
+    datum_error, DatumChar, DatumCharClass, DatumError, DatumOffset, DatumPipe, DatumResult,
+};
 
 /// Datum token type.
 /// This is paired with the token contents, if any.
@@ -22,7 +24,7 @@ pub enum DatumTokenType {
     /// List start. Buffer is empty.
     ListStart,
     /// List end. Buffer is empty.
-    ListEnd
+    ListEnd,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -46,7 +48,7 @@ pub enum DatumTokenizerAction {
     Push(char),
     /// Take token, then clear buffer.
     /// The offset here is the start of the token.
-    Token(DatumTokenType)
+    Token(DatumTokenType),
 }
 
 /// Datum tokenizer state machine.
@@ -55,7 +57,7 @@ pub enum DatumTokenizerAction {
 /// When a token is complete, you will receive the [DatumTokenizerAction::Token] action.
 /// You should also call feed with [None] when relevant to get any token at the very end of the file.
 /// ```
-/// use datum_rs::{DatumDecoder, DatumPipe, DatumTokenizer, DatumTokenizerAction, DatumTokenType};
+/// use datum::{DatumDecoder, DatumPipe, DatumTokenizer, DatumTokenizerAction, DatumTokenType};
 /// let example = "some-symbol ; ignored comment";
 /// let mut decoder = DatumDecoder::default();
 /// let mut tokenizer = DatumTokenizer::default();
@@ -119,46 +121,47 @@ impl DatumPipe for DatumTokenizer {
     type Output = DatumTokenizerAction;
 
     /// Given an incoming character, returns the resulting actions.
-    fn feed<F: FnMut(DatumOffset, DatumTokenizerAction) -> DatumResult<()>>(&mut self, at: DatumOffset, chr: Option<DatumChar>, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumOffset, DatumTokenizerAction) -> DatumResult<()>>(
+        &mut self,
+        at: DatumOffset,
+        chr: Option<DatumChar>,
+        f: &mut F,
+    ) -> DatumResult<()> {
         self.0 = match self.0 {
             DatumTokenizerState::Start => match chr {
                 Some(chr) => Self::start_feed(f, at, chr),
-                None => Ok(DatumTokenizerState::Start)
+                None => Ok(DatumTokenizerState::Start),
             },
-            DatumTokenizerState::LineComment => {
-                match chr.map(|v| v.class()) {
-                    Some(DatumCharClass::Newline) => Ok(DatumTokenizerState::Start),
-                    None => Ok(DatumTokenizerState::Start),
-                    _ => Ok(DatumTokenizerState::LineComment)
+            DatumTokenizerState::LineComment => match chr.map(|v| v.class()) {
+                Some(DatumCharClass::Newline) => Ok(DatumTokenizerState::Start),
+                None => Ok(DatumTokenizerState::Start),
+                _ => Ok(DatumTokenizerState::LineComment),
+            },
+            DatumTokenizerState::String(start) => match chr.map(|v| v.class()) {
+                Some(DatumCharClass::String) => {
+                    f(start, DatumTokenizerAction::Token(DatumTokenType::String))?;
+                    Ok(DatumTokenizerState::Start)
                 }
-            },
-            DatumTokenizerState::String(start) => {
-                match chr.map(|v| v.class()) {
-                    Some(DatumCharClass::String) => {
-                        f(start, DatumTokenizerAction::Token(DatumTokenType::String))?;
-                        Ok(DatumTokenizerState::Start)
-                    }
-                    Some(_) => {
-                        f(at, DatumTokenizerAction::Push(chr.unwrap().char()))?;
-                        Ok(DatumTokenizerState::String(start))
-                    },
-                    None => Err(datum_error!(Interrupted, at, "mid-string eof"))
+                Some(_) => {
+                    f(at, DatumTokenizerAction::Push(chr.unwrap().char()))?;
+                    Ok(DatumTokenizerState::String(start))
                 }
+                None => Err(datum_error!(Interrupted, at, "mid-string eof")),
             },
-            DatumTokenizerState::PotentialIdentifier(start, immediate, expanded) => {
-                match chr {
-                    None => {
+            DatumTokenizerState::PotentialIdentifier(start, immediate, expanded) => match chr {
+                None => {
+                    f(start, DatumTokenizerAction::Token(immediate))?;
+                    Ok(DatumTokenizerState::Start)
+                }
+                Some(chr) => {
+                    if chr.potential_identifier() {
+                        f(at, DatumTokenizerAction::Push(chr.char()))?;
+                        Ok(DatumTokenizerState::PotentialIdentifier(
+                            start, expanded, expanded,
+                        ))
+                    } else {
                         f(start, DatumTokenizerAction::Token(immediate))?;
-                        Ok(DatumTokenizerState::Start)
-                    },
-                    Some(chr) => {
-                        if chr.potential_identifier() {
-                            f(at, DatumTokenizerAction::Push(chr.char()))?;
-                            Ok(DatumTokenizerState::PotentialIdentifier(start, expanded, expanded))
-                        } else {
-                            f(start, DatumTokenizerAction::Token(immediate))?;
-                            Self::start_feed(f, at, chr)
-                        }
+                        Self::start_feed(f, at, chr)
                     }
                 }
             },
@@ -170,12 +173,20 @@ impl DatumPipe for DatumTokenizer {
 impl DatumTokenizer {
     /// Handling for the start state.
     /// This is used both in that state and when going 'through' that state when leaving another state.
-    fn start_feed<F: FnMut(DatumOffset, DatumTokenizerAction) -> DatumResult<()>>(f: &mut F, at: DatumOffset, chr: DatumChar) -> DatumResult<DatumTokenizerState> {
+    fn start_feed<F: FnMut(DatumOffset, DatumTokenizerAction) -> DatumResult<()>>(
+        f: &mut F,
+        at: DatumOffset,
+        chr: DatumChar,
+    ) -> DatumResult<DatumTokenizerState> {
         match chr.class() {
             DatumCharClass::Content => {
                 f(at, DatumTokenizerAction::Push(chr.char()))?;
-                Ok(DatumTokenizerState::PotentialIdentifier(at, DatumTokenType::ID, DatumTokenType::ID))
-            },
+                Ok(DatumTokenizerState::PotentialIdentifier(
+                    at,
+                    DatumTokenType::ID,
+                    DatumTokenType::ID,
+                ))
+            }
             DatumCharClass::Whitespace => Ok(DatumTokenizerState::Start),
             DatumCharClass::Newline => Ok(DatumTokenizerState::Start),
             DatumCharClass::LineComment => Ok(DatumTokenizerState::LineComment),
@@ -183,22 +194,32 @@ impl DatumTokenizer {
             DatumCharClass::ListStart => {
                 f(at, DatumTokenizerAction::Token(DatumTokenType::ListStart))?;
                 Ok(DatumTokenizerState::Start)
-            },
+            }
             DatumCharClass::ListEnd => {
                 f(at, DatumTokenizerAction::Token(DatumTokenType::ListEnd))?;
                 Ok(DatumTokenizerState::Start)
-            },
-            DatumCharClass::SpecialID => {
-                Ok(DatumTokenizerState::PotentialIdentifier(at, DatumTokenType::SpecialID, DatumTokenType::SpecialID))
-            },
+            }
+            DatumCharClass::SpecialID => Ok(DatumTokenizerState::PotentialIdentifier(
+                at,
+                DatumTokenType::SpecialID,
+                DatumTokenType::SpecialID,
+            )),
             DatumCharClass::Sign => {
                 f(at, DatumTokenizerAction::Push(chr.char()))?;
-                Ok(DatumTokenizerState::PotentialIdentifier(at, DatumTokenType::ID, DatumTokenType::Numeric))
-            },
+                Ok(DatumTokenizerState::PotentialIdentifier(
+                    at,
+                    DatumTokenType::ID,
+                    DatumTokenType::Numeric,
+                ))
+            }
             DatumCharClass::Digit => {
                 f(at, DatumTokenizerAction::Push(chr.char()))?;
-                Ok(DatumTokenizerState::PotentialIdentifier(at, DatumTokenType::Numeric, DatumTokenType::Numeric))
-            },
+                Ok(DatumTokenizerState::PotentialIdentifier(
+                    at,
+                    DatumTokenType::Numeric,
+                    DatumTokenType::Numeric,
+                ))
+            }
         }
     }
 }

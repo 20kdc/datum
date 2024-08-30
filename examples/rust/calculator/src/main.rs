@@ -7,8 +7,8 @@
 
 use std::collections::HashMap;
 
-use datum_rs::{
-    DatumAtom, DatumErrorKind, DatumMayContainAtom, DatumResult, DatumValue, ViaDatumPipe,
+use datum::{
+    DatumAtom, DatumErrorKind, DatumMayContainAtom, DatumResult, DatumValue, IntoViaDatumPipe,
 };
 use rand::RngCore;
 use rustyline::{config::Configurer, validate::ValidationResult};
@@ -133,9 +133,9 @@ impl Environment {
             DatumValue::Atom(DatumAtom::Float(v)) => Ok(CompiledExpr::Const(*v)),
             DatumValue::Atom(DatumAtom::Integer(v)) => Ok(CompiledExpr::Const(*v as f64)),
             DatumValue::List(list) => {
-                if let Some(DatumValue::Atom(DatumAtom::ID(sym))) = &list.get(0) {
+                if let Some(DatumValue::Atom(DatumAtom::ID(sym))) = &list.first() {
                     let call_args = &list[1..];
-                    if let Some(fni) = self.fn_index_for(&sym, call_args.len()) {
+                    if let Some(fni) = self.fn_index_for(sym, call_args.len()) {
                         let v = &self.functions[fni];
                         // compile expressions, and if successful, translate them into our args
                         self.compile_exprs(args, call_args)
@@ -186,17 +186,23 @@ impl Environment {
     /// This includes the 'meta' forms (def and minimize).
     fn execute(&mut self, value: &DatumValue) -> Result<(), String> {
         if let Some(list) = value.as_list() {
-            match list.get(0) {
+            match list.first() {
                 Some(DatumValue::Atom(DatumAtom::ID(syntax_maybe))) => {
                     if syntax_maybe.eq("def") {
                         if list.len() < 3 {
-                            return Err(format!("def has to be at least 3 items long"));
+                            return Err("def has to be at least 3 items long".to_string());
                         }
-                        let res = list[1].as_id_result(|| format!("def name must be an ID"))?.to_string();
+                        let res = list[1]
+                            .as_id_result(|| "def name must be an ID".to_string())?
+                            .to_string();
                         let argslice = &list[2..list.len() - 1];
                         let mut argsyms: HashMap<String, usize> = HashMap::new();
                         for (k, v) in argslice.iter().enumerate() {
-                            argsyms.insert(v.as_id_result(|| format!("def args must be IDs"))?.to_string(), k);
+                            argsyms.insert(
+                                v.as_id_result(|| "def args must be IDs".to_string())?
+                                    .to_string(),
+                                k,
+                            );
                         }
                         let compiled = self.compile_expr(&argsyms, &list[list.len() - 1])?;
                         if let Some(fni) = self.fn_index_for(&res, argslice.len()) {
@@ -211,11 +217,13 @@ impl Environment {
                         Ok(())
                     } else if syntax_maybe.eq("minimize") {
                         if list.len() < 4 {
-                            return Err(format!("minimize has to be at least 4 items long"));
+                            return Err("minimize has to be at least 4 items long".to_string());
                         }
-                        let sym = list[1].as_id_result(|| format!("name must be symbol"))?;
-                        let mut magnitude = list[2].as_number_result(|| format!("magnitude must be number"))?;
-                        let tolerance = list[3].as_number_result(|| format!("tolerance must be number"))?;
+                        let sym = list[1].as_id_result(|| "name must be symbol".to_string())?;
+                        let mut magnitude =
+                            list[2].as_number_result(|| "magnitude must be number".to_string())?;
+                        let tolerance =
+                            list[3].as_number_result(|| "tolerance must be number".to_string())?;
                         let initial_value_exprs =
                             self.compile_exprs(&HashMap::new(), &list[4..])?;
                         let mut values: Vec<f64> = initial_value_exprs
@@ -223,7 +231,7 @@ impl Environment {
                             .map(|expr| expr.run(&[]))
                             .collect();
                         let fni =
-                            if let Some(fni) = self.fn_index_for(&sym, initial_value_exprs.len()) {
+                            if let Some(fni) = self.fn_index_for(sym, initial_value_exprs.len()) {
                                 fni
                             } else {
                                 return Err(format!(
@@ -240,7 +248,7 @@ impl Environment {
                         let mut rng = rand::thread_rng();
                         while values_score >= tolerance {
                             for (k, v) in values_test.iter_mut().enumerate() {
-                                let ofs = (((rng.next_u32() as f64) / (u32::max_value() as f64))
+                                let ofs = (((rng.next_u32() as f64) / (u32::MAX as f64))
                                     - 0.5)
                                     * 2.0
                                     * magnitude;
@@ -286,7 +294,7 @@ impl rustyline::validate::Validator for DatumParseHelper {
         let res: DatumResult<()> = ctx
             .input()
             .chars()
-            .via_datum_pipe(datum_rs::datum_char_to_value_pipeline())
+            .via_datum_pipe(datum::datum_char_to_value_pipeline())
             .try_fold((), |_, r| match r {
                 Err(e) => Err(e),
                 Ok(_) => Ok(()),
@@ -334,12 +342,12 @@ Example: (def problem x (- (- (* x 2) 5) 9)) (minimize problem 1 0.001 0)
     let mut env = Environment::new();
     loop {
         rl.set_helper(Some(DatumParseHelper));
-        let line = rl.readline(&"> ");
+        let line = rl.readline("> ");
         match line {
             Ok(line) => {
                 for v in line
                     .chars()
-                    .via_datum_pipe(datum_rs::datum_char_to_value_pipeline())
+                    .via_datum_pipe(datum::datum_char_to_value_pipeline())
                 {
                     match v {
                         Err(err) => {

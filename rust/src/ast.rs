@@ -31,18 +31,21 @@
 // Finally, there were a ton of cases which were like "if this specific internal array runs out of memory, bring the parser to an error state" - repeat for practically every line in the parser...
 // Sorry. - 20kdc
 
-use core::{convert::TryFrom, fmt::Write};
-use core::fmt::{Debug, Display};
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::fmt::{Debug, Display};
+use core::{convert::TryFrom, fmt::Write};
 
-use crate::{datum_error, DatumAtom, DatumError, DatumMayContainAtom, DatumOffset, DatumPipe, DatumResult, DatumToken, DatumTokenType, DatumWriter};
+use crate::{
+    datum_error, DatumAtom, DatumError, DatumMayContainAtom, DatumOffset, DatumPipe, DatumResult,
+    DatumToken, DatumTokenType, DatumWriter,
+};
 
 /// Datum AST node / value.
 #[derive(Clone, PartialEq, PartialOrd, Debug)]
 pub enum DatumValue {
     Atom(DatumAtom<String>),
-    List(Vec<DatumValue>)
+    List(Vec<DatumValue>),
 }
 
 impl Default for DatumValue {
@@ -75,7 +78,7 @@ impl DatumValue {
     pub fn as_list(&self) -> Option<&Vec<DatumValue>> {
         match self {
             DatumValue::List(list) => Some(list),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -107,13 +110,18 @@ impl DatumPipe for DatumParser {
     type Input = DatumToken<String>;
     type Output = DatumValue;
 
-    fn feed<F: FnMut(DatumOffset, DatumValue) -> DatumResult<()>>(&mut self, at: DatumOffset, token: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
-        if let None = token {
+    fn feed<F: FnMut(DatumOffset, DatumValue) -> DatumResult<()>>(
+        &mut self,
+        at: DatumOffset,
+        token: Option<Self::Input>,
+        f: &mut F,
+    ) -> DatumResult<()> {
+        if token.is_none() {
             return if !self.stack.is_empty() {
                 Err(datum_error!(Interrupted, at, "eof inside list"))
             } else {
                 Ok(())
-            }
+            };
         }
         let token = token.unwrap();
         if self.stack.is_empty() {
@@ -125,7 +133,7 @@ impl DatumPipe for DatumParser {
                 let list = Vec::new();
                 self.stack.push(list);
                 Ok(())
-            },
+            }
             DatumTokenType::ListEnd => {
                 let res = self.stack.pop();
                 if let Some(v) = res {
@@ -133,17 +141,21 @@ impl DatumPipe for DatumParser {
                 } else {
                     Err(datum_error!(BadData, at, "end of list while not in list"))
                 }
-            },
+            }
             _ => match DatumAtom::try_from(token) {
                 Err(e) => Err(e),
                 Ok(v) => self.feed_value(DatumValue::Atom(v), f),
-            }
+            },
         }
     }
 }
 
 impl DatumParser {
-    fn feed_value<F: FnMut(DatumOffset, DatumValue) -> DatumResult<()>>(&mut self, v: DatumValue, f: &mut F) -> DatumResult<()> {
+    fn feed_value<F: FnMut(DatumOffset, DatumValue) -> DatumResult<()>>(
+        &mut self,
+        v: DatumValue,
+        f: &mut F,
+    ) -> DatumResult<()> {
         match self.stack.pop() {
             None => f(self.start, v),
             Some(mut list) => {

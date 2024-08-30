@@ -16,7 +16,7 @@ pub enum DatumWriterState {
     /// Queued indentation.
     QueuedIndent,
     /// After a token. Will emit a space unless the token is a list end.
-    AfterToken
+    AfterToken,
 }
 
 impl Default for DatumWriterState {
@@ -31,7 +31,7 @@ pub struct DatumWriter {
     /// Indentation level (in tabs).
     pub indent: usize,
     /// Writer's state. Beware: Editing this improperly can create unreadable output.
-    pub state: DatumWriterState
+    pub state: DatumWriterState,
 }
 
 impl DatumWriter {
@@ -40,14 +40,14 @@ impl DatumWriter {
     /// Will still emit indentation.
     pub fn emit_whitespace(&mut self, f: &mut dyn Write, list_end: bool) -> core::fmt::Result {
         match self.state {
-            DatumWriterState::None => {},
+            DatumWriterState::None => {}
             DatumWriterState::QueuedIndent => {
                 let mut counter = self.indent;
                 while counter > 0 {
                     f.write_char('\t')?;
                     counter -= 1;
                 }
-            },
+            }
             DatumWriterState::AfterToken => {
                 if !list_end {
                     f.write_char(' ')?;
@@ -83,7 +83,11 @@ impl DatumWriter {
     }
 
     /// Writes a token.
-    pub fn write_token<B: Deref<Target = str>>(&mut self, f: &mut dyn Write, token: &DatumToken<B>) -> core::fmt::Result {
+    pub fn write_token<B: Deref<Target = str>>(
+        &mut self,
+        f: &mut dyn Write,
+        token: &DatumToken<B>,
+    ) -> core::fmt::Result {
         let token_type = token.token_type();
         self.emit_whitespace(f, token_type == DatumTokenType::ListEnd)?;
         token.write(f)?;
@@ -96,7 +100,11 @@ impl DatumWriter {
     }
 
     /// Writes a value from AST atom.
-    pub fn write_atom<B: Deref<Target = str>>(&mut self, f: &mut dyn Write, value: &DatumAtom<B>) -> core::fmt::Result {
+    pub fn write_atom<B: Deref<Target = str>>(
+        &mut self,
+        f: &mut dyn Write,
+        value: &DatumAtom<B>,
+    ) -> core::fmt::Result {
         self.emit_whitespace(f, false)?;
         value.write(f)?;
         self.state = DatumWriterState::AfterToken;

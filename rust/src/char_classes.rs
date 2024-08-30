@@ -5,7 +5,10 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use core::{fmt::{Display, Write}, ops::Deref};
+use core::{
+    fmt::{Display, Write},
+    ops::Deref,
+};
 
 /// Datum character class.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -36,18 +39,21 @@ impl DatumCharClass {
     /// If this character class is a potential identifier.
     /// Note that this can be accessed via [DatumChar] via [DatumChar::deref].
     /// ```
-    /// use datum_rs::DatumChar;
+    /// use datum::DatumChar;
     /// assert!(DatumChar::identify('a').expect("not backslash").potential_identifier());
     /// ```
     #[inline]
     pub const fn potential_identifier(&self) -> bool {
-        matches!(self, Self::Content | Self::Sign | Self::Digit | Self::SpecialID)
+        matches!(
+            self,
+            Self::Content | Self::Sign | Self::Digit | Self::SpecialID
+        )
     }
 
     /// If this character class starts a number.
     /// Note that this can be accessed via [DatumChar] via [DatumChar::deref].
     /// ```
-    /// use datum_rs::DatumChar;
+    /// use datum::DatumChar;
     /// assert!(DatumChar::identify('0').expect("not backslash").numeric_start());
     /// ```
     #[inline]
@@ -87,9 +93,9 @@ impl DatumCharClass {
 
 const fn make_hex_digit(v: u8) -> char {
     if v >= 0xA {
-        (('a' as u8) + (v - 0xA)) as char
+        (b'a' + (v - 0xA)) as char
     } else {
-        (('0' as u8) + v) as char
+        (b'0' + v) as char
     }
 }
 
@@ -109,13 +115,13 @@ pub struct DatumChar {
     /// The raw value of this character.
     char: char,
     /// The class of this character.
-    class: DatumCharClass
+    class: DatumCharClass,
 }
 
 impl DatumChar {
     /// Returns the byte in Datum's class/byte stream.
     /// ```
-    /// use datum_rs::DatumChar;
+    /// use datum::DatumChar;
     /// let list_start = DatumChar::identify('(').expect("not backslash");
     /// assert_eq!(list_start.char(), '(');
     /// ```
@@ -126,7 +132,7 @@ impl DatumChar {
 
     /// Returns the class in Datum's class/byte stream.
     /// ```
-    /// use datum_rs::{DatumChar, DatumCharClass};
+    /// use datum::{DatumChar, DatumCharClass};
     /// let list_start = DatumChar::identify('(').expect("not backslash");
     /// assert_eq!(list_start.class(), DatumCharClass::ListStart);
     /// ```
@@ -137,7 +143,7 @@ impl DatumChar {
 
     /// Writes the necessary UTF-8 characters that will be read back as this [DatumChar].
     /// ```
-    /// use datum_rs::DatumChar;
+    /// use datum::DatumChar;
     /// let content_open_paren = DatumChar::content('(');
     /// let mut out = String::new();
     /// _ = content_open_paren.write(&mut out);
@@ -172,7 +178,7 @@ impl DatumChar {
     /// Identifies an unescaped character and returns the corresponding [DatumChar].
     /// Backslash is special due to being the escape character, and this will return [None].
     /// ```
-    /// use datum_rs::DatumChar;
+    /// use datum::DatumChar;
     /// assert_eq!(DatumChar::identify('\\'), None);
     /// assert_ne!(DatumChar::identify('a'), None);
     /// ```
@@ -180,13 +186,16 @@ impl DatumChar {
     pub const fn identify(v: char) -> Option<DatumChar> {
         match DatumCharClass::identify(v) {
             None => None,
-            Some(class) => Some(DatumChar { char: v, class })
+            Some(class) => Some(DatumChar { char: v, class }),
         }
     }
 
     /// Creates a content character for the given value.
     pub const fn content(v: char) -> DatumChar {
-        DatumChar { char: v, class: DatumCharClass::Content }
+        DatumChar {
+            char: v,
+            class: DatumCharClass::Content,
+        }
     }
 
     /// Creates a reasonable string-content character for the given value.
@@ -199,8 +208,8 @@ impl DatumChar {
             '"' => Self::content(v),
             _ => match Self::identify(v) {
                 None => Self::content(v),
-                Some(rchr) => rchr
-            }
+                Some(rchr) => rchr,
+            },
         }
     }
 
@@ -208,10 +217,12 @@ impl DatumChar {
     pub const fn potential_identifier(v: char) -> DatumChar {
         match Self::identify(v) {
             None => Self::content(v),
-            Some(rchr) => if rchr.class().potential_identifier() {
-                rchr
-            } else {
-                Self::content(v)
+            Some(rchr) => {
+                if rchr.class().potential_identifier() {
+                    rchr
+                } else {
+                    Self::content(v)
+                }
             }
         }
     }
@@ -233,6 +244,9 @@ impl Deref for DatumChar {
 impl Default for DatumChar {
     fn default() -> Self {
         // Whitespace ' ' should avoid messing up whatever somehow receives this value.
-        DatumChar { char: ' ', class: DatumCharClass::Whitespace }
+        DatumChar {
+            char: ' ',
+            class: DatumCharClass::Whitespace,
+        }
     }
 }

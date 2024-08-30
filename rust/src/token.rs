@@ -5,12 +5,19 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use core::{convert::TryFrom, fmt::{Display, Write}, ops::Deref};
+use core::{
+    convert::TryFrom,
+    fmt::{Display, Write},
+    ops::Deref,
+};
 
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 
-use crate::{datum_error, DatumChar, DatumCharClass, DatumError, DatumOffset, DatumPipe, DatumResult, DatumTokenType, DatumTokenizer, DatumTokenizerAction};
+use crate::{
+    datum_error, DatumChar, DatumCharClass, DatumError, DatumOffset, DatumPipe, DatumResult,
+    DatumTokenType, DatumTokenizer, DatumTokenizerAction,
+};
 
 /// Datum token with integrated string.
 /// Notably, integer/float are stored as their values here to prevent unwritable values existing.
@@ -27,7 +34,7 @@ pub enum DatumToken<B: Deref<Target = str>> {
     /// Float.
     Float(DatumOffset, f64),
     ListStart(DatumOffset),
-    ListEnd(DatumOffset)
+    ListEnd(DatumOffset),
 }
 
 impl<B: Deref<Target = str>> Default for DatumToken<B> {
@@ -56,7 +63,7 @@ impl<B: Deref<Target = str>> TryFrom<(DatumTokenType, DatumOffset, B)> for Datum
                 } else {
                     Err(datum_error!(BadData, at, "bad numeric"))
                 }
-            },
+            }
             (DatumTokenType::ListStart, at, _) => Ok(DatumToken::ListStart(at)),
             (DatumTokenType::ListEnd, at, _) => Ok(DatumToken::ListEnd(at)),
         }
@@ -85,7 +92,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
             Self::String(_, b) => Some(b),
             Self::ID(_, b) => Some(b),
             Self::SpecialID(_, b) => Some(b),
-            _ => None
+            _ => None,
         }
     }
 
@@ -112,7 +119,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                     DatumChar::string_content(v).write(f)?;
                 }
                 f.write_char('\"')
-            },
+            }
             Self::ID(_, b) => {
                 let mut chars = b.chars();
                 match chars.next() {
@@ -123,7 +130,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                                     // business as usual
                                     DatumChar::content(v).write(f)?;
                                     DatumChar::content(v2).write(f)?;
-                                },
+                                }
                                 None => {
                                     // lone sign
                                     return f.write_char(v);
@@ -136,12 +143,10 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                             DatumChar::potential_identifier(remainder).write(f)?;
                         }
                         core::fmt::Result::Ok(())
-                    },
-                    None => {
-                        f.write_str("#{}#")
                     }
+                    None => f.write_str("#{}#"),
                 }
-            },
+            }
             Self::SpecialID(_, b) => {
                 f.write_char('#')?;
                 let chars = b.chars();
@@ -149,7 +154,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                     DatumChar::potential_identifier(remainder).write(f)?;
                 }
                 core::fmt::Result::Ok(())
-            },
+            }
             Self::Integer(_, v) => core::fmt::write(f, format_args!("{}", v)),
             Self::Float(_, v) => {
                 if v.is_nan() {
@@ -171,9 +176,9 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                     }
                     core::fmt::Result::Ok(())
                 }
-            },
+            }
             Self::ListStart(_) => f.write_char('('),
-            Self::ListEnd(_) => f.write_char(')')
+            Self::ListEnd(_) => f.write_char(')'),
         }
     }
 }
@@ -201,7 +206,7 @@ impl Write for DatumFloatObserver<'_> {
 
 /// Tokenizer that uses String as an internal buffer and spits out DatumToken.
 /// ```
-/// use datum_rs::{DatumDecoder, DatumToken, DatumStringTokenizer, DatumComposePipe, DatumPipe};
+/// use datum::{DatumDecoder, DatumToken, DatumStringTokenizer, DatumComposePipe, DatumPipe};
 /// let mut decoder = DatumDecoder::default().compose(DatumStringTokenizer::default());
 /// let mut out = Vec::new();
 /// decoder.feed_iter_to_vec(&mut out, ("these become test symbols").chars(), true);
@@ -216,12 +221,19 @@ impl<B: Write + Deref<Target = str> + Default> DatumPipe for DatumPipeTokenizer<
     type Input = DatumChar;
     type Output = DatumToken<B>;
 
-    fn feed<F: FnMut(DatumOffset, Self::Output) -> DatumResult<()>>(&mut self, at: DatumOffset, i: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumOffset, Self::Output) -> DatumResult<()>>(
+        &mut self,
+        at: DatumOffset,
+        i: Option<Self::Input>,
+        f: &mut F,
+    ) -> DatumResult<()> {
         let m0 = &mut self.0;
-        self.1.feed(at, i, &mut |offset, action| {
-            match action {
-                DatumTokenizerAction::Push(chr) => m0.write_char(chr).map_err(|_| datum_error!(OutOfRoom, at, "failed to write to token buffer")),
-                DatumTokenizerAction::Token(v) => f(offset, DatumToken::try_from((v, at, core::mem::take(m0)))?)
+        self.1.feed(at, i, &mut |offset, action| match action {
+            DatumTokenizerAction::Push(chr) => m0
+                .write_char(chr)
+                .map_err(|_| datum_error!(OutOfRoom, at, "failed to write to token buffer")),
+            DatumTokenizerAction::Token(v) => {
+                f(offset, DatumToken::try_from((v, at, core::mem::take(m0)))?)
             }
         })
     }

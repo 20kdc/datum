@@ -12,7 +12,7 @@ use crate::{datum_error, DatumChar, DatumError, DatumOffset, DatumPipe, DatumRes
 enum DatumDecoderState {
     Normal,
     Escaping(DatumOffset),
-    HexEscape(DatumOffset, u32)
+    HexEscape(DatumOffset, u32),
 }
 
 /// Decoder for the Datum encoding layer.
@@ -30,14 +30,19 @@ impl DatumPipe for DatumDecoder {
     type Input = char;
     type Output = DatumChar;
 
-    fn feed<F: FnMut(DatumOffset, DatumChar) -> DatumResult<()>>(&mut self, at: DatumOffset, char: Option<char>, f: &mut F) -> DatumResult<()> {
-        if let None = char {
+    fn feed<F: FnMut(DatumOffset, DatumChar) -> DatumResult<()>>(
+        &mut self,
+        at: DatumOffset,
+        char: Option<char>,
+        f: &mut F,
+    ) -> DatumResult<()> {
+        if char.is_none() {
             return if self.0 != DatumDecoderState::Normal {
                 self.0 = DatumDecoderState::Normal;
                 Err(datum_error!(Interrupted, at, "decoder: interrupted"))
             } else {
                 Ok(())
-            }
+            };
         }
         let char = char.unwrap();
         if char == '\r' {
@@ -52,35 +57,29 @@ impl DatumPipe for DatumDecoder {
                         Some(v) => {
                             f(at, v)?;
                             Ok(DatumDecoderState::Normal)
-                        },
-                        None => Err(datum_error!(BadData, at, "forbidden character"))
+                        }
+                        None => Err(datum_error!(BadData, at, "forbidden character")),
                     }
                 }
-            },
-            DatumDecoderState::Escaping(start) => {
-                match char {
-                    'r' => {
-                        f(start, DatumChar::content('\r'))?;
-                        Ok(DatumDecoderState::Normal)
-                    },
-                    'n' => {
-                        f(start, DatumChar::content('\n'))?;
-                        Ok(DatumDecoderState::Normal)
-                    },
-                    't' => {
-                        f(start, DatumChar::content('\t'))?;
-                        Ok(DatumDecoderState::Normal)
-                    },
-                    'x' => {
-                        Ok(DatumDecoderState::HexEscape(start, 0))
-                    },
-                    '\n' => {
-                        Err(datum_error!(BadData, at, "newline in escape sequence"))
-                    },
-                    _ => {
-                        f(start, DatumChar::content(char))?;
-                        Ok(DatumDecoderState::Normal)
-                    }
+            }
+            DatumDecoderState::Escaping(start) => match char {
+                'r' => {
+                    f(start, DatumChar::content('\r'))?;
+                    Ok(DatumDecoderState::Normal)
+                }
+                'n' => {
+                    f(start, DatumChar::content('\n'))?;
+                    Ok(DatumDecoderState::Normal)
+                }
+                't' => {
+                    f(start, DatumChar::content('\t'))?;
+                    Ok(DatumDecoderState::Normal)
+                }
+                'x' => Ok(DatumDecoderState::HexEscape(start, 0)),
+                '\n' => Err(datum_error!(BadData, at, "newline in escape sequence")),
+                _ => {
+                    f(start, DatumChar::content(char))?;
+                    Ok(DatumDecoderState::Normal)
                 }
             },
             DatumDecoderState::HexEscape(start, v) => {

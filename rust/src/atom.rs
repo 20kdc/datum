@@ -5,7 +5,12 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use core::{convert::TryFrom, fmt::{Display, Write}, ops::Deref};
+use core::{
+    convert::TryFrom,
+    fmt::{Display, Write},
+    hash::Hash,
+    ops::Deref,
+};
 
 use crate::{datum_error, DatumError, DatumResult, DatumToken};
 
@@ -13,6 +18,7 @@ use crate::{datum_error, DatumError, DatumResult, DatumToken};
 /// This enum also contains the functions that convert between tokens and atoms.
 /// You can think of it as the bridge between Datum's tokenization model and value model.
 /// Accordingly, it does not contain offsets.
+/// Implements [Hash] despite potentially containing floats; if this is a problem for your application then don't use the [Hash] implementation.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Debug, Default)]
 pub enum DatumAtom<B: Deref<Target = str>> {
     String(B),
@@ -21,7 +27,7 @@ pub enum DatumAtom<B: Deref<Target = str>> {
     Float(f64),
     Boolean(bool),
     #[default]
-    Nil
+    Nil,
 }
 
 impl<B: Default + Deref<Target = str>> TryFrom<DatumToken<B>> for DatumAtom<B> {
@@ -48,7 +54,7 @@ impl<B: Default + Deref<Target = str>> TryFrom<DatumToken<B>> for DatumAtom<B> {
                     Ok(DatumAtom::Float(f64::INFINITY))
                 } else if b.eq_ignore_ascii_case("i-inf.0") {
                     Ok(DatumAtom::Float(f64::NEG_INFINITY))
-                } else if b.starts_with("x") || b.starts_with("X") {
+                } else if b.starts_with('x') || b.starts_with('X') {
                     let res = i64::from_str_radix(&b[1..], 16);
                     if let Ok(v) = res {
                         Ok(DatumAtom::Integer(v))
@@ -58,10 +64,14 @@ impl<B: Default + Deref<Target = str>> TryFrom<DatumToken<B>> for DatumAtom<B> {
                 } else {
                     Err(datum_error!(BadData, at, "invalid special ID"))
                 }
-            },
+            }
             DatumToken::Integer(_, v) => Ok(DatumAtom::Integer(v)),
             DatumToken::Float(_, v) => Ok(DatumAtom::Float(v)),
-            _ => Err(datum_error!(BadData, token.offset(), "token not atomizable"))
+            _ => Err(datum_error!(
+                BadData,
+                token.offset(),
+                "token not atomizable"
+            )),
         }
     }
 }
@@ -75,14 +85,14 @@ impl<B: Deref<Target = str>> DatumAtom<B> {
             DatumAtom::Integer(v) => {
                 let v: DatumToken<&'static str> = DatumToken::Integer(0, *v);
                 v.write(f)
-            },
+            }
             DatumAtom::Float(v) => {
                 let v: DatumToken<&'static str> = DatumToken::Float(0, *v);
                 v.write(f)
-            },
+            }
             DatumAtom::Boolean(true) => f.write_str("#t"),
             DatumAtom::Boolean(false) => f.write_str("#f"),
-            DatumAtom::Nil => f.write_str("#nil")
+            DatumAtom::Nil => f.write_str("#nil"),
         }
     }
 }
@@ -90,6 +100,34 @@ impl<B: Deref<Target = str>> DatumAtom<B> {
 impl<B: Deref<Target = str>> Display for DatumAtom<B> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.write(f)
+    }
+}
+
+impl<B: Deref<Target = str>> Hash for DatumAtom<B> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::String(s) => {
+                state.write_u8(0);
+                s.hash(state)
+            }
+            Self::ID(s) => {
+                state.write_u8(1);
+                s.hash(state)
+            }
+            Self::Integer(i) => {
+                state.write_u8(2);
+                i.hash(state)
+            }
+            Self::Float(f) => {
+                state.write_u8(3);
+                f.to_bits().hash(state)
+            }
+            Self::Boolean(b) => {
+                state.write_u8(4);
+                b.hash(state)
+            }
+            Self::Nil => state.write_u8(5),
+        }
     }
 }
 
