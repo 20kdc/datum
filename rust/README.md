@@ -1,4 +1,4 @@
-# `datum-rs`
+# `datum`: Rust implementation of Datum
 
 Datum is a terse, human-writable data format meant for quick implementation in various languages.
 
@@ -8,9 +8,9 @@ It was originally developed for use in some of my Java programs for the purpose 
 * Avoids the problems that YAML has.
 * Concise implementation.
 
-It's intended to be reasonably readable by R6RS readers, but not a strict subset. (However, it has been used in a Java project to implement a "Javaified" Scheme dialect.)
+It's intended to be reasonably readable by R6RS readers, but not a strict subset. (However, the format has been used in a Java project to implement a "Javaified" Scheme dialect.)
 
-`datum-rs` is a library for reading and writing Datum values in Rust.
+The `datum` crate is a library for reading and writing Datum values in Rust.
 
 In order to allow use in diverse environments, it attempts to follow some key rules:
 
@@ -27,4 +27,8 @@ For further information, please see <https://github.com/20kdc/datum>.
 
 * `std`: Currently a breakage prevention placeholder as it isn't used right now.
 * `alloc`: For if alloc is used.
-* `detailed_errors`: This adds compile-time location/line strings for all `DatumError`s. If missing, these will be empty.
+* `detailed_errors`: Default feature that includes messages for `DatumError`s. If missing, these will be empty.
+
+## MSRV Policy
+
+The MSRV is `1.54.0`.

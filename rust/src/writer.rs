@@ -26,6 +26,7 @@ impl Default for DatumWriterState {
 }
 
 /// General interface for formatting/printing Datum content.
+/// Note that if the passed writer returns an error at any point, the state of the writer is indeterminate, as it can be mid-token or part-way through a comment.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct DatumWriter {
     /// Indentation level (in tabs).
@@ -60,9 +61,8 @@ impl DatumWriter {
 
     /// Writes a newline and prepares for it.
     pub fn write_newline(&mut self, f: &mut dyn Write) -> core::fmt::Result {
-        f.write_char('\n')?;
         self.state = DatumWriterState::QueuedIndent;
-        Ok(())
+        f.write_char('\n')
     }
 
     /// Writes a line comment. Newlines are converted into more line comments.
@@ -78,8 +78,7 @@ impl DatumWriter {
                 f.write_char(v)?;
             }
         }
-        self.write_newline(f)?;
-        Ok(())
+        self.write_newline(f)
     }
 
     /// Writes a token.

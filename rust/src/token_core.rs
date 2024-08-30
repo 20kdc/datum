@@ -15,8 +15,8 @@ use crate::{
 pub enum DatumTokenType {
     /// String. Buffer contents are the unescaped string contents.
     String,
-    /// ID. Buffer contents are the symbol.
-    ID,
+    /// Symbol. Buffer contents are the symbol.
+    Symbol,
     /// Special ID. Buffer contents are the symbol (text after, but not including, '#').
     SpecialID,
     /// Numeric
@@ -78,7 +78,7 @@ pub enum DatumTokenizerAction {
 ///                 },
 ///                 DatumTokenizerAction::Token(tt) => {
 ///                     // Example 'parser': only accepts sequences of this one symbol
-///                     assert_eq!(tt, DatumTokenType::ID);
+///                     assert_eq!(tt, DatumTokenType::Symbol);
 ///                     assert_eq!(&token[..token_len], b"some-symbol");
 ///                     token_len = 0;
 ///                 }
@@ -95,7 +95,7 @@ pub enum DatumTokenizerAction {
 ///     match a {
 ///         DatumTokenizerAction::Push(_) => {},
 ///         DatumTokenizerAction::Token(tt) => {
-///             assert_eq!(tt, DatumTokenType::ID);
+///             assert_eq!(tt, DatumTokenType::Symbol);
 ///             assert_eq!(&token[..token_len], b"some-symbol");
 ///             token_len = 0;
 ///         },
@@ -146,7 +146,7 @@ impl DatumPipe for DatumTokenizer {
                     f(at, DatumTokenizerAction::Push(chr.unwrap().char()))?;
                     Ok(DatumTokenizerState::String(start))
                 }
-                None => Err(datum_error!(Interrupted, at, "mid-string eof")),
+                None => Err(datum_error!(Interrupted, at, "token1: mid-string eof")),
             },
             DatumTokenizerState::PotentialIdentifier(start, immediate, expanded) => match chr {
                 None => {
@@ -183,8 +183,8 @@ impl DatumTokenizer {
                 f(at, DatumTokenizerAction::Push(chr.char()))?;
                 Ok(DatumTokenizerState::PotentialIdentifier(
                     at,
-                    DatumTokenType::ID,
-                    DatumTokenType::ID,
+                    DatumTokenType::Symbol,
+                    DatumTokenType::Symbol,
                 ))
             }
             DatumCharClass::Whitespace => Ok(DatumTokenizerState::Start),
@@ -208,7 +208,7 @@ impl DatumTokenizer {
                 f(at, DatumTokenizerAction::Push(chr.char()))?;
                 Ok(DatumTokenizerState::PotentialIdentifier(
                     at,
-                    DatumTokenType::ID,
+                    DatumTokenType::Symbol,
                     DatumTokenType::Numeric,
                 ))
             }

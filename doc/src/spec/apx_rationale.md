@@ -67,4 +67,16 @@ The decoder is separate from the tokenizer for three key reasons:
 
 1. It simplifies the specification over having three separate sets of 'escaping while...' states. In simpler 'read(1)' implementations, the decoder can be a single function that lives close to the tokenizer, also responsible for returning the tokenizer's 'unput'. It can either provide a character class with a character (identification in decoder; more upfront code but easier to read tokenizer), or it can provide a direct/indirect flag with a character (identification in tokenizer; less upfront code -- only really needs a function to check if a character is a potential identifier -- but tokenizer is much more awkward). As it already manages the 'unput byte,' this buffer can be extended to also include the output of Unicode escapes.
 2. It is important to be able to write any value to prevent 'surprise errors', where data, having been transformed, is re-emitted; but is now not writable, and thus an error occurs.
-3. Implementing the decoder as a clear, delineated unit allows for tricks like zero-copy parsing. In 'push' models, by using them individually and monitoring their output, the decoder and tokenizer can provide the information to slice the input text for numeric, string, and ID tokens. The resulting slices can then be wrapped in a datastructure to re-decode them on-demand.
+3. Implementing the decoder as a clear, delineated unit allows for tricks like zero-copy parsing. In 'push' models, by using them individually and monitoring their output, the decoder and tokenizer can provide the information to slice the input text for numeric, string, and symbol tokens. The resulting slices can then be wrapped in a datastructure to re-decode them on-demand.
+
+## Why does number/special identifier parsing occur after tokenization?
+
+This is mainly due to a sort of 'fight' between the standard library of many languages and zero-copy parsing.
+
+Ultimately, the way things are now, zero-alloc-focused implementations which can pass handling of this stage to the user have a pretty decent chance of being able to parse all integers and special identifiers 'live' without resorting to reimplementing the entire tokenizer or fixed-size buffers (with the implicit limit on numeric token size).
+
+In the Rust implementation, this manifests itself as the `Push`/`Token` tokenizer action stream.
+The user can track the 'expected integer value' of whatever is being written via `Push`, and then commit that if the appropriate `Token` action appears.
+Errors from the traditional buffer can be deferred until the token is returned.
+
+Float parsing, however, is hard, and mistakes can be very, very subtle, and very, very bad. For this reason, no generalized 'streaming number parser' implementation exists in Datum.

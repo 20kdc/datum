@@ -58,7 +58,7 @@ impl DatumPipe for DatumDecoder {
                             f(at, v)?;
                             Ok(DatumDecoderState::Normal)
                         }
-                        None => Err(datum_error!(BadData, at, "forbidden character")),
+                        None => Err(datum_error!(BadData, at, "decoder: forbidden character")),
                     }
                 }
             }
@@ -76,7 +76,11 @@ impl DatumPipe for DatumDecoder {
                     Ok(DatumDecoderState::Normal)
                 }
                 'x' => Ok(DatumDecoderState::HexEscape(start, 0)),
-                '\n' => Err(datum_error!(BadData, at, "newline in escape sequence")),
+                '\n' => Err(datum_error!(
+                    BadData,
+                    at,
+                    "decoder: newline in escape sequence"
+                )),
                 _ => {
                     f(start, DatumChar::content(char))?;
                     Ok(DatumDecoderState::Normal)
@@ -88,7 +92,11 @@ impl DatumPipe for DatumDecoder {
                         f(start, DatumChar::content(rustchar))?;
                         Ok(DatumDecoderState::Normal)
                     } else {
-                        Err(datum_error!(BadData, at, "invalid unicode in hex escape"))
+                        Err(datum_error!(
+                            BadData,
+                            at,
+                            "decoder: invalid unicode in hex escape"
+                        ))
                     }
                 } else {
                     let mut v_new = v;
@@ -97,7 +105,7 @@ impl DatumPipe for DatumDecoder {
                         v_new |= digit;
                         Ok(DatumDecoderState::HexEscape(start, v_new))
                     } else {
-                        Err(datum_error!(BadData, at, "invalid hex digit"))
+                        Err(datum_error!(BadData, at, "decoder: invalid hex digit"))
                     }
                 }
             }

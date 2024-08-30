@@ -121,7 +121,7 @@ impl Environment {
         expr: &DatumValue,
     ) -> Result<CompiledExpr, String> {
         match expr {
-            DatumValue::Atom(DatumAtom::ID(id)) => {
+            DatumValue::Atom(DatumAtom::Symbol(id)) => {
                 if let Some(k) = args.get(id) {
                     Ok(CompiledExpr::Arg(*k))
                 } else if let Some(fid) = self.fn_index_for(id, 0) {
@@ -133,7 +133,7 @@ impl Environment {
             DatumValue::Atom(DatumAtom::Float(v)) => Ok(CompiledExpr::Const(*v)),
             DatumValue::Atom(DatumAtom::Integer(v)) => Ok(CompiledExpr::Const(*v as f64)),
             DatumValue::List(list) => {
-                if let Some(DatumValue::Atom(DatumAtom::ID(sym))) = &list.first() {
+                if let Some(DatumValue::Atom(DatumAtom::Symbol(sym))) = &list.first() {
                     let call_args = &list[1..];
                     if let Some(fni) = self.fn_index_for(sym, call_args.len()) {
                         let v = &self.functions[fni];
@@ -187,19 +187,19 @@ impl Environment {
     fn execute(&mut self, value: &DatumValue) -> Result<(), String> {
         if let Some(list) = value.as_list() {
             match list.first() {
-                Some(DatumValue::Atom(DatumAtom::ID(syntax_maybe))) => {
+                Some(DatumValue::Atom(DatumAtom::Symbol(syntax_maybe))) => {
                     if syntax_maybe.eq("def") {
                         if list.len() < 3 {
                             return Err("def has to be at least 3 items long".to_string());
                         }
                         let res = list[1]
-                            .as_id_result(|| "def name must be an ID".to_string())?
+                            .as_sym_result(|| "def name must be a symbol".to_string())?
                             .to_string();
                         let argslice = &list[2..list.len() - 1];
                         let mut argsyms: HashMap<String, usize> = HashMap::new();
                         for (k, v) in argslice.iter().enumerate() {
                             argsyms.insert(
-                                v.as_id_result(|| "def args must be IDs".to_string())?
+                                v.as_sym_result(|| "def args must be IDs".to_string())?
                                     .to_string(),
                                 k,
                             );
@@ -219,7 +219,7 @@ impl Environment {
                         if list.len() < 4 {
                             return Err("minimize has to be at least 4 items long".to_string());
                         }
-                        let sym = list[1].as_id_result(|| "name must be symbol".to_string())?;
+                        let sym = list[1].as_sym_result(|| "name must be symbol".to_string())?;
                         let mut magnitude =
                             list[2].as_number_result(|| "magnitude must be number".to_string())?;
                         let tolerance =
@@ -248,8 +248,7 @@ impl Environment {
                         let mut rng = rand::thread_rng();
                         while values_score >= tolerance {
                             for (k, v) in values_test.iter_mut().enumerate() {
-                                let ofs = (((rng.next_u32() as f64) / (u32::MAX as f64))
-                                    - 0.5)
+                                let ofs = (((rng.next_u32() as f64) / (u32::MAX as f64)) - 0.5)
                                     * 2.0
                                     * magnitude;
                                 *v = values[k] + ofs;

@@ -1,10 +1,11 @@
 [package]
 name = "datum"
-version = "0.9.0"
+version = "1.0.0"
 description = "Terse, human-writable data format."
 repository = "https://github.com/20kdc/gabien-common/"
 license = "Unlicense"
 edition = "2018"
+metadata = { msrv = "1.54.0" }
 
 [features]
 default = ["std", "detailed_errors"]

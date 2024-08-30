@@ -32,7 +32,7 @@ impl DatumPipe for DatumUTF8Decoder {
     ) -> DatumResult<()> {
         if byte.is_none() {
             return if self.buffer_len != 0 {
-                Err(datum_error!(Interrupted, at, "UTF-8 sequence"))
+                Err(datum_error!(Interrupted, at, "utf8: interrupted"))
             } else {
                 Ok(())
             };
@@ -41,7 +41,7 @@ impl DatumPipe for DatumUTF8Decoder {
         if self.buffer_len >= (UTF8_DECODE_BUFFER as u8) {
             // this implies a UTF-8 character kept on continuing
             // and was not recognized as valid by Rust
-            Err(datum_error!(BadData, at, "overlong UTF-8 sequence"))
+            Err(datum_error!(BadData, at, "utf8: overlong"))
         } else if self.buffer_len == 0 {
             // first char of sequence, use special handling to catch errors early
             if byte <= 127 {
@@ -49,7 +49,7 @@ impl DatumPipe for DatumUTF8Decoder {
                 f(at, byte as char)
             } else if (0x80..=0xBF).contains(&byte) {
                 // can't start a sequence with a continuation
-                Err(datum_error!(BadData, at, "continuation at start"))
+                Err(datum_error!(BadData, at, "utf8: continuation at start"))
             } else {
                 // start bytes of multi-byte sequences
                 self.start = at;
@@ -60,7 +60,7 @@ impl DatumPipe for DatumUTF8Decoder {
         } else if !(0x80..=0xBF).contains(&byte) {
             // we're supposed to be adding continuations and suddenly this shows up?
             // (this path also catches if a character comes in that looks fine at a glance but from_utf8 doesn't like)
-            Err(datum_error!(BadData, at, "mid-sequence start"))
+            Err(datum_error!(BadData, at, "utf8: mid-sequence start"))
         } else {
             self.buffer[self.buffer_len as usize] = byte;
             self.buffer_len += 1;

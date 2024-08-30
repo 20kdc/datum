@@ -19,15 +19,20 @@ use crate::{datum_error, DatumError, DatumResult, DatumToken};
 /// You can think of it as the bridge between Datum's tokenization model and value model.
 /// Accordingly, it does not contain offsets.
 /// Implements [Hash] despite potentially containing floats; if this is a problem for your application then don't use the [Hash] implementation.
-#[derive(Clone, Copy, PartialEq, PartialOrd, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
 pub enum DatumAtom<B: Deref<Target = str>> {
     String(B),
-    ID(B),
+    Symbol(B),
     Integer(i64),
     Float(f64),
     Boolean(bool),
-    #[default]
     Nil,
+}
+
+impl<B: Deref<Target = str>> Default for DatumAtom<B> {
+    fn default() -> Self {
+        Self::Nil
+    }
 }
 
 impl<B: Default + Deref<Target = str>> TryFrom<DatumToken<B>> for DatumAtom<B> {
@@ -38,7 +43,7 @@ impl<B: Default + Deref<Target = str>> TryFrom<DatumToken<B>> for DatumAtom<B> {
     fn try_from(token: DatumToken<B>) -> DatumResult<DatumAtom<B>> {
         match token {
             DatumToken::String(_, b) => Ok(DatumAtom::String(b)),
-            DatumToken::ID(_, b) => Ok(DatumAtom::ID(b)),
+            DatumToken::Symbol(_, b) => Ok(DatumAtom::Symbol(b)),
             DatumToken::SpecialID(at, b) => {
                 if b.eq_ignore_ascii_case("t") {
                     Ok(DatumAtom::Boolean(true))
@@ -47,7 +52,7 @@ impl<B: Default + Deref<Target = str>> TryFrom<DatumToken<B>> for DatumAtom<B> {
                 } else if b.eq_ignore_ascii_case("nil") {
                     Ok(DatumAtom::Nil)
                 } else if b.eq("{}#") {
-                    Ok(DatumAtom::ID(B::default()))
+                    Ok(DatumAtom::Symbol(B::default()))
                 } else if b.eq_ignore_ascii_case("i+nan.0") {
                     Ok(DatumAtom::Float(f64::NAN))
                 } else if b.eq_ignore_ascii_case("i+inf.0") {
@@ -81,7 +86,7 @@ impl<B: Deref<Target = str>> DatumAtom<B> {
     pub fn write(&self, f: &mut dyn Write) -> core::fmt::Result {
         match &self {
             DatumAtom::String(v) => DatumToken::String(0, v.deref()).write(f),
-            DatumAtom::ID(v) => DatumToken::ID(0, v.deref()).write(f),
+            DatumAtom::Symbol(v) => DatumToken::Symbol(0, v.deref()).write(f),
             DatumAtom::Integer(v) => {
                 let v: DatumToken<&'static str> = DatumToken::Integer(0, *v);
                 v.write(f)
@@ -110,7 +115,7 @@ impl<B: Deref<Target = str>> Hash for DatumAtom<B> {
                 state.write_u8(0);
                 s.hash(state)
             }
-            Self::ID(s) => {
+            Self::Symbol(s) => {
                 state.write_u8(1);
                 s.hash(state)
             }
@@ -174,7 +179,7 @@ pub trait DatumMayContainAtom<B: Deref<Target = str>> {
     fn as_atom(&self) -> Option<&DatumAtom<B>>;
     as_x_result!(as_atom_result, as_atom, &DatumAtom<B>);
     as_x!(as_str, as_str_result, String, &B);
-    as_x!(as_id, as_id_result, ID, &B);
+    as_x!(as_sym, as_sym_result, Symbol, &B);
     as_x!(as_i64, as_i64_result, Integer, i64, *);
     as_x!(as_f64, as_f64_result, Float, f64, *);
     /// From the interior [DatumAtom] (if any), retrieves the float (if it is), else [None].

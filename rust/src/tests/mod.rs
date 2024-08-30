@@ -95,8 +95,8 @@ fn test_token_write() {
         &DatumToken::String(0, "Test\\\r\n\t").to_string(),
         "\"Test\\\\\\r\\n\\t\""
     );
-    assert_eq!(&DatumToken::ID(0, "").to_string(), "#{}#");
-    assert_eq!(&DatumToken::ID(0, "test").to_string(), "test");
+    assert_eq!(&DatumToken::Symbol(0, "").to_string(), "#{}#");
+    assert_eq!(&DatumToken::Symbol(0, "test").to_string(), "test");
     assert_eq!(&DatumToken::SpecialID(0, "test").to_string(), "#test");
     let flt: DatumToken<&'static str> = DatumToken::Float(0, -1.0);
     assert_eq!(&flt.to_string(), "-1.0");
@@ -159,6 +159,28 @@ fn decoder_test(input: &str, output: &str, out_class: DatumCharClass) {
             })
             .unwrap();
     }
+    assert_eq!(decoder, DatumDecoder::default());
+    decoder.feed(0, None, &mut |_, _| Ok(())).unwrap();
+    assert_eq!(output_iterator.next(), None);
+}
+
+/// Tests the decoder for a single character.
+/// This verifies all sorts of useful properties, especially that the starting offset is always returned.
+/// This is important for no-alloc no-fixed-buffer parsing.
+fn decoder_test_char(input: &str, output: &str, out_class: DatumCharClass) {
+    let mut decoder = DatumDecoder::default();
+    let mut output_iterator = output.chars();
+    for (k, v) in input.chars().enumerate() {
+        decoder
+            .feed((100 + k) as u64, Some(v), &mut |at, c| {
+                assert_eq!(at, 100);
+                assert_eq!(c.char(), output_iterator.next().expect("early output end"));
+                assert_eq!(c.class(), out_class);
+                Ok(())
+            })
+            .unwrap();
+    }
+    assert_eq!(decoder, DatumDecoder::default());
     decoder.feed(0, None, &mut |_, _| Ok(())).unwrap();
     assert_eq!(output_iterator.next(), None);
 }
@@ -239,22 +261,22 @@ fn all_decoder_test_cases() {
         DatumCharClass::Content,
     );
     // a few simple sanity checks
-    decoder_test("\\n", "\n", DatumCharClass::Content);
-    decoder_test("\\r", "\r", DatumCharClass::Content);
-    decoder_test("\\t", "\t", DatumCharClass::Content);
-    decoder_test("\n", "\n", DatumCharClass::Newline);
-    decoder_test(";", ";", DatumCharClass::LineComment);
-    decoder_test("\"", "\"", DatumCharClass::String);
-    decoder_test("(", "(", DatumCharClass::ListStart);
-    decoder_test(")", ")", DatumCharClass::ListEnd);
-    decoder_test("#", "#", DatumCharClass::SpecialID);
-    decoder_test("\\;", ";", DatumCharClass::Content);
+    decoder_test_char("\\n", "\n", DatumCharClass::Content);
+    decoder_test_char("\\r", "\r", DatumCharClass::Content);
+    decoder_test_char("\\t", "\t", DatumCharClass::Content);
+    decoder_test_char("\n", "\n", DatumCharClass::Newline);
+    decoder_test_char(";", ";", DatumCharClass::LineComment);
+    decoder_test_char("\"", "\"", DatumCharClass::String);
+    decoder_test_char("(", "(", DatumCharClass::ListStart);
+    decoder_test_char(")", ")", DatumCharClass::ListEnd);
+    decoder_test_char("#", "#", DatumCharClass::SpecialID);
+    decoder_test_char("\\;", ";", DatumCharClass::Content);
     // Hex escape check
-    decoder_test("\\x0A;", "\n", DatumCharClass::Content);
+    decoder_test_char("\\x0A;", "\n", DatumCharClass::Content);
     // UTF-8 encoding check
-    decoder_test("\\xB9;", "¹", DatumCharClass::Content);
-    decoder_test("\\x10FFff;", "\u{10FFFF}", DatumCharClass::Content);
-    decoder_test("\u{10FFFF}", "\u{10FFFF}", DatumCharClass::Content);
+    decoder_test_char("\\xB9;", "¹", DatumCharClass::Content);
+    decoder_test_char("\\x10FFff;", "\u{10FFFF}", DatumCharClass::Content);
+    decoder_test_char("\u{10FFFF}", "\u{10FFFF}", DatumCharClass::Content);
     // --
 
     // failure tests

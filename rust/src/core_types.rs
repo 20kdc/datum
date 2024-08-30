@@ -48,6 +48,8 @@ pub struct DatumError {
     pub message: &'static str,
 }
 
+// this should be migrated to core::error::Error once that stabilizes
+
 #[cfg(feature = "std")]
 impl std::error::Error for DatumError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
@@ -151,10 +153,7 @@ pub trait DatumPipe {
     }
 
     /// Composes with another pipeline.
-    fn compose<P: DatumPipe<Input = Self::Output>>(
-        self,
-        other: P,
-    ) -> impl DatumPipe<Input = Self::Input, Output = P::Output>
+    fn compose<P: DatumPipe<Input = Self::Output>>(self, other: P) -> DatumComposePipe<Self, P>
     where
         Self: Sized,
     {

@@ -7,6 +7,8 @@ cargo test
 cargo doc
 cargo tarpaulin
 cargo build --all-features
-cd ..
-mdbook test doc -L target/debug/deps/
+cd ../examples/rust/calculator
+cargo build
+cd ../../..
+mdbook test doc -L rust/target/debug/deps/
 # also check: cargo semver-checks

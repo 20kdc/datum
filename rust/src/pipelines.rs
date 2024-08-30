@@ -17,13 +17,12 @@ use crate::{
 /// Byte to token parsing pipeline.
 pub fn datum_byte_to_token_pipeline() -> impl DatumPipe<Input = u8, Output = DatumToken<String>> {
     let utf2chr = DatumComposePipe(DatumUTF8Decoder::default(), DatumDecoder::default());
-    
+
     DatumComposePipe(utf2chr, DatumStringTokenizer::default())
 }
 
 /// Character to token parsing pipeline.
 pub fn datum_char_to_token_pipeline() -> impl DatumPipe<Input = char, Output = DatumToken<String>> {
-    
     DatumComposePipe(DatumDecoder::default(), DatumStringTokenizer::default())
 }
 
@@ -32,13 +31,13 @@ pub fn datum_char_to_token_pipeline() -> impl DatumPipe<Input = char, Output = D
 /// Byte to value parsing pipeline.
 pub fn datum_byte_to_value_pipeline() -> impl DatumPipe<Input = u8, Output = DatumValue> {
     let tokenizer = datum_byte_to_token_pipeline();
-    
+
     DatumComposePipe(tokenizer, DatumParser::default())
 }
 
 /// Char to value parsing pipeline.
 pub fn datum_char_to_value_pipeline() -> impl DatumPipe<Input = char, Output = DatumValue> {
     let tokenizer = datum_char_to_token_pipeline();
-    
+
     DatumComposePipe(tokenizer, DatumParser::default())
 }

@@ -25,8 +25,8 @@ use crate::{
 pub enum DatumToken<B: Deref<Target = str>> {
     /// String. Buffer contents are the unescaped string contents.
     String(DatumOffset, B),
-    /// ID. Buffer contents are the symbol.
-    ID(DatumOffset, B),
+    /// Symbol. Buffer contents are the symbol.
+    Symbol(DatumOffset, B),
     /// Special ID. Buffer contents are the symbol (text after, but not including, '#').
     SpecialID(DatumOffset, B),
     /// Integer.
@@ -50,18 +50,19 @@ impl<B: Deref<Target = str>> TryFrom<(DatumTokenType, DatumOffset, B)> for Datum
     fn try_from(value: (DatumTokenType, DatumOffset, B)) -> Result<Self, Self::Error> {
         match value {
             (DatumTokenType::String, at, v) => Ok(DatumToken::String(at, v)),
-            (DatumTokenType::ID, at, v) => Ok(DatumToken::ID(at, v)),
+            (DatumTokenType::Symbol, at, v) => Ok(DatumToken::Symbol(at, v)),
             (DatumTokenType::SpecialID, at, v) => Ok(DatumToken::SpecialID(at, v)),
             (DatumTokenType::Numeric, at, v) => {
                 // Numbers are parsed here to ensure that all possible [DatumToken]s are writable.
                 // Originally, this was offloaded to DatumAtom, but this bloated the spec and caused all sorts of problems.
+                // Having to figure out how to make it reasonably safe if someone tries to make "ABCD" a numeric token did not end well.
                 // Besides, the quicker we get rid of these things the saner the memory use is for people who use [char;16] etc...
                 if let Ok(v) = v.parse() {
                     Ok(DatumToken::Integer(at, v))
                 } else if let Ok(v) = v.parse() {
                     Ok(DatumToken::Float(at, v))
                 } else {
-                    Err(datum_error!(BadData, at, "bad numeric"))
+                    Err(datum_error!(BadData, at, "token2: bad numeric"))
                 }
             }
             (DatumTokenType::ListStart, at, _) => Ok(DatumToken::ListStart(at)),
@@ -76,7 +77,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
     pub fn token_type(&self) -> DatumTokenType {
         match self {
             Self::String(_, _) => DatumTokenType::String,
-            Self::ID(_, _) => DatumTokenType::ID,
+            Self::Symbol(_, _) => DatumTokenType::Symbol,
             Self::SpecialID(_, _) => DatumTokenType::SpecialID,
             Self::Integer(_, _) => DatumTokenType::Numeric,
             Self::Float(_, _) => DatumTokenType::Numeric,
@@ -90,7 +91,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
     pub fn buffer(&self) -> Option<&B> {
         match self {
             Self::String(_, b) => Some(b),
-            Self::ID(_, b) => Some(b),
+            Self::Symbol(_, b) => Some(b),
             Self::SpecialID(_, b) => Some(b),
             _ => None,
         }
@@ -101,7 +102,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
     pub fn offset(&self) -> DatumOffset {
         match self {
             Self::String(at, _) => *at,
-            Self::ID(at, _) => *at,
+            Self::Symbol(at, _) => *at,
             Self::SpecialID(at, _) => *at,
             Self::Integer(at, _) => *at,
             Self::Float(at, _) => *at,
@@ -120,7 +121,7 @@ impl<B: Deref<Target = str>> DatumToken<B> {
                 }
                 f.write_char('\"')
             }
-            Self::ID(_, b) => {
+            Self::Symbol(_, b) => {
                 let mut chars = b.chars();
                 match chars.next() {
                     Some(v) => {
@@ -229,9 +230,9 @@ impl<B: Write + Deref<Target = str> + Default> DatumPipe for DatumPipeTokenizer<
     ) -> DatumResult<()> {
         let m0 = &mut self.0;
         self.1.feed(at, i, &mut |offset, action| match action {
-            DatumTokenizerAction::Push(chr) => m0
-                .write_char(chr)
-                .map_err(|_| datum_error!(OutOfRoom, at, "failed to write to token buffer")),
+            DatumTokenizerAction::Push(chr) => m0.write_char(chr).map_err(|_| {
+                datum_error!(OutOfRoom, at, "token2: failed to write to token buffer")
+            }),
             DatumTokenizerAction::Token(v) => {
                 f(offset, DatumToken::try_from((v, at, core::mem::take(m0)))?)
             }

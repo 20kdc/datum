@@ -11,6 +11,7 @@
 hello
 (hello)
 1.23
+-6.5
 #i+nan.0
 #i+inf.0
 #i-inf.0
