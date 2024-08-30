@@ -1,8 +1,8 @@
 [package]
 name = "datum"
-version = "1.0.0"
+version = "1.0.1"
 description = "Terse, human-writable data format."
-repository = "https://github.com/20kdc/gabien-common/"
+repository = "https://github.com/20kdc/datum/"
 license = "Unlicense"
 edition = "2018"
 metadata = { msrv = "1.54.0" }

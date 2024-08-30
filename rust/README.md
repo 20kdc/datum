@@ -35,4 +35,6 @@ Semantic versioning is in use. However, if at all possible, the major version wi
 
 The MSRV is `1.54.0`.
 
-If it comes down to breaking API compatibility or breaking MSRV compatibility, then the MSRV will be updated without a major version bump. However,
+If it comes down to breaking API compatibility or breaking MSRV compatibility, then the MSRV will be updated without a major version bump.
+
+However, _this really shouldn't happen._ The crate should not significantly grow in scope (at most, possibly Serde support), and the decoupled structure should stop issues like lifetimes getting entangled.
