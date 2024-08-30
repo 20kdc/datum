@@ -37,8 +37,8 @@ use core::fmt::{Debug, Display};
 use core::{convert::TryFrom, fmt::Write};
 
 use crate::{
-    datum_error, DatumAtom, DatumError, DatumMayContainAtom, DatumOffset, DatumPipe, DatumResult,
-    DatumToken, DatumTokenType, DatumWriter,
+    datum_error, DatumAtom, DatumMayContainAtom, DatumOffset, DatumPipe, DatumResult, DatumToken,
+    DatumTokenType, DatumWriter,
 };
 
 /// Datum AST node / value.

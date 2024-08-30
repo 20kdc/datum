@@ -70,13 +70,12 @@ impl Display for DatumError {
 }
 
 /// Creates a [DatumError] formatted with the Rust file and line.
-/// Expects you to have `use DatumError` etc.
 /// Beware: If `detailed_errors` is off, messages are discarded.
 #[cfg(feature = "detailed_errors")]
 #[macro_export]
 macro_rules! datum_error {
     ($kind:ident, $offset:expr, $info:literal) => {
-        DatumError {
+        $crate::DatumError {
             kind: $crate::DatumErrorKind::$kind,
             offset: $offset,
             message: $info,
@@ -85,13 +84,12 @@ macro_rules! datum_error {
 }
 
 /// Creates a [DatumError] formatted with the Rust file and line.
-/// Expects you to have `use DatumError` etc.
 /// Beware: If `detailed_errors` is off, messages are discarded.
 #[cfg(not(feature = "detailed_errors"))]
 #[macro_export]
 macro_rules! datum_error {
     ($kind:ident, $offset:expr, $info:literal) => {
-        DatumError {
+        $crate::DatumError {
             kind: $crate::DatumErrorKind::$kind,
             offset: $offset,
             message: "",

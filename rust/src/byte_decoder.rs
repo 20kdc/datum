@@ -5,7 +5,7 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use crate::{datum_error, DatumError, DatumOffset, DatumPipe, DatumResult};
+use crate::{datum_error, DatumOffset, DatumPipe, DatumResult};
 
 const UTF8_DECODE_BUFFER: usize = 4;
 
