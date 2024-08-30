@@ -187,11 +187,7 @@ impl<A: DatumPipe, B: DatumPipe<Input = A::Output>> DatumPipe for DatumComposePi
     }
 }
 
-/// Pipe iterator.
-/// This maintains an internal [VecDeque] buffer of values to return.
-/// When the iterator runs out of elements, an EOF will be signalled.
-/// At that point, the pipe iterator will no longer retrieve elements from the source.
-/// Offsets are internally managed and start at 0.
+/// This is used in [IntoViaDatumPipe::via_datum_pipe].
 #[cfg(feature = "alloc")]
 #[derive(Clone)]
 pub struct ViaDatumPipe<I: Iterator<Item = S>, S, P: DatumPipe<Input = S>> {
@@ -233,7 +229,11 @@ impl<I: Iterator<Item = S>, S, P: DatumPipe<Input = S>> Iterator for ViaDatumPip
 /// This is used to provide [IntoViaDatumPipe::via_datum_pipe] on [Iterator].
 #[cfg(feature = "alloc")]
 pub trait IntoViaDatumPipe<I>: Iterator<Item = I> + Sized {
-    /// Parses/handles elements via a [DatumPipe]. See [ViaDatumPipe] for details.
+    /// Parses/handles elements via a [DatumPipe].
+    /// The resulting [ViaDatumPipe] maintains an internal [VecDeque] buffer of values to return.
+    /// When the iterator runs out of elements, an EOF will be signalled.
+    /// At that point, the pipe iterator will no longer retrieve elements from the source.
+    /// Offsets are internally managed and start at 0.
     fn via_datum_pipe<P: DatumPipe<Input = I>>(self, pipe: P) -> ViaDatumPipe<Self, I, P>;
 }
 

@@ -53,7 +53,7 @@ pub enum DatumTokenizerAction {
 
 /// Datum tokenizer state machine.
 /// This API is a little harder to use, but allows complete control over buffer allocation/etc.
-/// In particular, it expects you to keep track of bytes it sends your way with the [DatumTokenizerAction::Push] action.
+/// In particular, it expects you to keep track of characters it sends your way with the [DatumTokenizerAction::Push] action.
 /// When a token is complete, you will receive the [DatumTokenizerAction::Token] action.
 /// You should also call feed with [None] when relevant to get any token at the very end of the file.
 /// ```

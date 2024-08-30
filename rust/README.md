@@ -29,6 +29,10 @@ For further information, please see <https://github.com/20kdc/datum>.
 * `alloc`: For if alloc is used.
 * `detailed_errors`: Default feature that includes messages for `DatumError`s. If missing, these will be empty.
 
-## MSRV Policy
+## MSRV/Version Policy
+
+Semantic versioning is in use. However, if at all possible, the major version will never be incremented. If alternate APIs must be created to avoid breaking compatibility, then alternate APIs will be created.
 
 The MSRV is `1.54.0`.
+
+If it comes down to breaking API compatibility or breaking MSRV compatibility, then the MSRV will be updated without a major version bump. However,
