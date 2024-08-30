@@ -28,7 +28,7 @@ impl DatumPipe for MyExampleParser {
 	type Input = char;
 	type Output = u8;
 
-	fn feed<F: FnMut(u8) -> DatumResult<()>>(&mut self, _at: DatumOffset, c: Option<char>, f: &mut F) -> DatumResult<()> {
+	fn feed<F: FnMut(DatumOffset, u8) -> DatumResult<()>>(&mut self, at: DatumOffset, c: Option<char>, f: &mut F) -> DatumResult<()> {
 		if let None = c {
 			return Ok(())
 		}
@@ -40,13 +40,13 @@ impl DatumPipe for MyExampleParser {
 			self.0 = self.0.wrapping_sub(1);
 			Ok(())
 		} else if c == '.' {
-			f(self.0)
+			f(at, self.0)
 		} else if c == '!' {
 			self.0 = self.0.wrapping_add(32);
 			Ok(())
 		} else if c == ':' {
-			f(self.0)?;
-			f(self.0)
+			f(at, self.0)?;
+			f(at, self.0)
 		} else {
 			// we just ignore unknown characters
 			Ok(())
@@ -57,25 +57,26 @@ impl DatumPipe for MyExampleParser {
 let mut test = MyExampleParser(0);
 
 // we got some initial bytes...
-test.feed(0, Some('!'), &mut |_| Ok(())).unwrap();
-test.feed(0, Some('!'), &mut |_| Ok(())).unwrap();
-test.feed(0, Some('+'), &mut |_| Ok(())).unwrap();
+test.feed(0, Some('!'), &mut |_, _| Ok(())).unwrap();
+test.feed(0, Some('!'), &mut |_, _| Ok(())).unwrap();
+test.feed(0, Some('+'), &mut |_, _| Ok(())).unwrap();
 // (network socket ran out of data/etc...)
 // (...time passes...)
 // ...we got more data!
-test.feed(0, Some('.'), &mut |_| Ok(())).unwrap();
-test.feed(0, Some('+'), &mut |_| Ok(())).unwrap();
-test.feed(0, Some('.'), &mut |_| Ok(())).unwrap();
-test.feed(0, Some('+'), &mut |_| Ok(())).unwrap();
-test.feed(0, Some('.'), &mut |_| Ok(())).unwrap();
+test.feed(0, Some('.'), &mut |_, _| Ok(())).unwrap();
+test.feed(0, Some('+'), &mut |_, _| Ok(())).unwrap();
+test.feed(0, Some('.'), &mut |_, _| Ok(())).unwrap();
+test.feed(0, Some('+'), &mut |_, _| Ok(())).unwrap();
+test.feed(0, Some('.'), &mut |_, _| Ok(())).unwrap();
 // Socket closed.
-test.feed(0, None, &mut |_| Ok(())).unwrap();
+test.feed(0, None, &mut |_, _| Ok(())).unwrap();
 ```
 
 Now, this parser is pretty absurd, but it goes over the basic principles of the `DatumPipe` API:
 
 * Implementations can input and return whatever types they like, though they always use `DatumError`.
 * Semi-opaque `u64` 'offsets' are passed through (useful for error handling).
+	* Implementations should pick the offset that is most convenient for reuse in various circumstances, including zero-copy parsing. As a result, offsets may "jump back" to the start of a relevant object; tokenizers do this.
 * Implementations may return multiple results from a single call using the closure provided.
 * The closure can itself return errors.
 * EOF is represented as a final `None` value.

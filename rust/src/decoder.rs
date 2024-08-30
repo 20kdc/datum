@@ -11,8 +11,8 @@ use crate::{datum_error, DatumChar, DatumError, DatumOffset, DatumPipe, DatumRes
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum DatumDecoderState {
     Normal,
-    Escaping,
-    HexEscape(u32)
+    Escaping(DatumOffset),
+    HexEscape(DatumOffset, u32)
 }
 
 /// Decoder for the Datum encoding layer.
@@ -30,7 +30,7 @@ impl DatumPipe for DatumDecoder {
     type Input = char;
     type Output = DatumChar;
 
-    fn feed<F: FnMut(DatumChar) -> DatumResult<()>>(&mut self, at: DatumOffset, char: Option<char>, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumOffset, DatumChar) -> DatumResult<()>>(&mut self, at: DatumOffset, char: Option<char>, f: &mut F) -> DatumResult<()> {
         if let None = char {
             return if self.0 != DatumDecoderState::Normal {
                 self.0 = DatumDecoderState::Normal;
@@ -46,47 +46,47 @@ impl DatumPipe for DatumDecoder {
         let new_state = match self.0 {
             DatumDecoderState::Normal => {
                 if char == '\\' {
-                    Ok(DatumDecoderState::Escaping)
+                    Ok(DatumDecoderState::Escaping(at))
                 } else {
                     match DatumChar::identify(char) {
                         Some(v) => {
-                            f(v)?;
+                            f(at, v)?;
                             Ok(DatumDecoderState::Normal)
                         },
                         None => Err(datum_error!(BadData, at, "forbidden character"))
                     }
                 }
             },
-            DatumDecoderState::Escaping => {
+            DatumDecoderState::Escaping(start) => {
                 match char {
                     'r' => {
-                        f(DatumChar::content('\r'))?;
+                        f(start, DatumChar::content('\r'))?;
                         Ok(DatumDecoderState::Normal)
                     },
                     'n' => {
-                        f(DatumChar::content('\n'))?;
+                        f(start, DatumChar::content('\n'))?;
                         Ok(DatumDecoderState::Normal)
                     },
                     't' => {
-                        f(DatumChar::content('\t'))?;
+                        f(start, DatumChar::content('\t'))?;
                         Ok(DatumDecoderState::Normal)
                     },
                     'x' => {
-                        Ok(DatumDecoderState::HexEscape(0))
+                        Ok(DatumDecoderState::HexEscape(start, 0))
                     },
                     '\n' => {
                         Err(datum_error!(BadData, at, "newline in escape sequence"))
                     },
                     _ => {
-                        f(DatumChar::content(char))?;
+                        f(start, DatumChar::content(char))?;
                         Ok(DatumDecoderState::Normal)
                     }
                 }
             },
-            DatumDecoderState::HexEscape(v) => {
+            DatumDecoderState::HexEscape(start, v) => {
                 if char == ';' {
                     if let Some(rustchar) = char::from_u32(v) {
-                        f(DatumChar::content(rustchar))?;
+                        f(start, DatumChar::content(rustchar))?;
                         Ok(DatumDecoderState::Normal)
                     } else {
                         Err(datum_error!(BadData, at, "invalid unicode in hex escape"))
@@ -96,7 +96,7 @@ impl DatumPipe for DatumDecoder {
                     v_new <<= 4;
                     if let Some(digit) = char.to_digit(16) {
                         v_new |= digit;
-                        Ok(DatumDecoderState::HexEscape(v_new))
+                        Ok(DatumDecoderState::HexEscape(start, v_new))
                     } else {
                         Err(datum_error!(BadData, at, "invalid hex digit"))
                     }

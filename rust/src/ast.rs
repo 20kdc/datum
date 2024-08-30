@@ -99,6 +99,7 @@ impl DatumMayContainAtom<String> for DatumValue {
 /// Datum parser (from tokens into values).
 #[derive(Clone, Debug, Default)]
 pub struct DatumParser {
+    start: DatumOffset,
     stack: Vec<Vec<DatumValue>>,
 }
 
@@ -106,7 +107,7 @@ impl DatumPipe for DatumParser {
     type Input = DatumToken<String>;
     type Output = DatumValue;
 
-    fn feed<F: FnMut(DatumValue) -> DatumResult<()>>(&mut self, at: DatumOffset, token: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumOffset, DatumValue) -> DatumResult<()>>(&mut self, at: DatumOffset, token: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
         if let None = token {
             return if !self.stack.is_empty() {
                 Err(datum_error!(Interrupted, at, "eof inside list"))
@@ -115,6 +116,10 @@ impl DatumPipe for DatumParser {
             }
         }
         let token = token.unwrap();
+        if self.stack.is_empty() {
+            // outermost value started here
+            self.start = at;
+        }
         match token.token_type() {
             DatumTokenType::ListStart => {
                 let list = Vec::new();
@@ -138,9 +143,9 @@ impl DatumPipe for DatumParser {
 }
 
 impl DatumParser {
-    fn feed_value<F: FnMut(DatumValue) -> DatumResult<()>>(&mut self, v: DatumValue, f: &mut F) -> DatumResult<()> {
+    fn feed_value<F: FnMut(DatumOffset, DatumValue) -> DatumResult<()>>(&mut self, v: DatumValue, f: &mut F) -> DatumResult<()> {
         match self.stack.pop() {
-            None => f(v),
+            None => f(self.start, v),
             Some(mut list) => {
                 list.push(v);
                 self.stack.push(list);

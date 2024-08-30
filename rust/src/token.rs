@@ -216,12 +216,12 @@ impl<B: Write + Deref<Target = str> + Default> DatumPipe for DatumPipeTokenizer<
     type Input = DatumChar;
     type Output = DatumToken<B>;
 
-    fn feed<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, at: DatumOffset, i: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumOffset, Self::Output) -> DatumResult<()>>(&mut self, at: DatumOffset, i: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
         let m0 = &mut self.0;
-        self.1.feed(at, i.map(|v| v.class()), &mut |action| {
+        self.1.feed(at, i, &mut |offset, action| {
             match action {
-                DatumTokenizerAction::Push => m0.write_char(i.unwrap().char()).map_err(|_| datum_error!(OutOfRoom, at, "failed to write to token buffer")),
-                DatumTokenizerAction::Token(v) => f(DatumToken::try_from((v, at, core::mem::take(m0)))?)
+                DatumTokenizerAction::Push(chr) => m0.write_char(chr).map_err(|_| datum_error!(OutOfRoom, at, "failed to write to token buffer")),
+                DatumTokenizerAction::Token(v) => f(offset, DatumToken::try_from((v, at, core::mem::take(m0)))?)
             }
         })
     }

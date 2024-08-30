@@ -12,6 +12,7 @@ const UTF8_DECODE_BUFFER: usize = 4;
 /// UTF-8 stream decoder.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct DatumUTF8Decoder {
+    start: DatumOffset,
     /// UTF-8 decoding buffer
     buffer: [u8; UTF8_DECODE_BUFFER],
     /// UTF-8 decoding buffer length
@@ -23,7 +24,7 @@ impl DatumPipe for DatumUTF8Decoder {
     type Output = char;
 
     /// Given a [u8], returns a resulting [char], if any.
-    fn feed<F: FnMut(char) -> DatumResult<()>>(&mut self, at: DatumOffset, byte: Option<u8>, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumOffset, char) -> DatumResult<()>>(&mut self, at: DatumOffset, byte: Option<u8>, f: &mut F) -> DatumResult<()> {
         if let None = byte {
             return if self.buffer_len != 0 {
                 Err(datum_error!(Interrupted, at, "UTF-8 sequence"))
@@ -40,12 +41,13 @@ impl DatumPipe for DatumUTF8Decoder {
             // first char of sequence, use special handling to catch errors early
             if byte <= 127 {
                 // fast-path these
-                f(byte as char)
+                f(at, byte as char)
             } else if (0x80..=0xBF).contains(&byte) {
                 // can't start a sequence with a continuation
                 Err(datum_error!(BadData, at, "continuation at start"))
             } else {
                 // start bytes of multi-byte sequences
+                self.start = at;
                 self.buffer[0] = byte;
                 self.buffer_len = 1;
                 Ok(())
@@ -62,7 +64,7 @@ impl DatumPipe for DatumUTF8Decoder {
             if let Ok(res2) = res {
                 self.buffer_len = 0;
                 if let Some(v) = res2.chars().next() {
-                    f(v)?;
+                    f(self.start, v)?;
                 } else {
                     unreachable!()
                 }

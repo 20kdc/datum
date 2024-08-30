@@ -72,7 +72,9 @@ pub trait DatumPipe {
 
     /// Feeds in I, and you may some amount of O.
     /// If None is passed, EOF happened.
-    fn feed<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, at: DatumOffset, i: Option<Self::Input>, f: &mut F) -> DatumResult<()>;
+    /// Beware that EOF offsets will 'skip' the function for future stages, so transforming offsets here is not okay. The primary purpose of the offset output is to ensure offsets reliably point at the start of an output, rather than the end; this can be used for various useful purposes.
+    /// Because of that, offsets may "jump backwards" if it's useful to do so (this happens in the tokenizer).
+    fn feed<F: FnMut(DatumOffset, Self::Output) -> DatumResult<()>>(&mut self, at: DatumOffset, i: Option<Self::Input>, f: &mut F) -> DatumResult<()>;
 
     /// Feeds into a vec or similar from a slice.
     /// Offsets are automatically managed, starting from 0 and increasing by 1 for each input element.
@@ -87,11 +89,11 @@ pub trait DatumPipe {
     fn feed_iter_to_vec<S: IntoIterator<Item = Self::Input>, V: Extend<Self::Output>>(&mut self, target: &mut V, source: S, eof: bool) -> DatumResult<()> {
         let mut offset: DatumOffset = 0;
         for v in source {
-            self.feed(offset, Some(v), &mut |o| { target.extend(Some(o)); Ok(()) })?;
+            self.feed(offset, Some(v), &mut |_, v| { target.extend(Some(v)); Ok(()) })?;
             offset += 1;
         }
         if eof {
-            self.feed(offset, None, &mut |o| { target.extend(Some(o)); Ok(()) })
+            self.feed(offset, None, &mut |_, v| { target.extend(Some(v)); Ok(()) })
         } else {
             Ok(())
         }
@@ -111,11 +113,11 @@ impl<A: DatumPipe, B: DatumPipe<Input = A::Output>> DatumPipe for DatumComposePi
     type Input = A::Input;
     type Output = B::Output;
 
-    fn feed<F: FnMut(Self::Output) -> DatumResult<()>>(&mut self, at: DatumOffset, i: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
+    fn feed<F: FnMut(DatumOffset, Self::Output) -> DatumResult<()>>(&mut self, at: DatumOffset, i: Option<Self::Input>, f: &mut F) -> DatumResult<()> {
         let m0 = &mut self.0;
         let m1 = &mut self.1;
         let was_none = i.is_none();
-        m0.feed(at, i, &mut |v| m1.feed(at, Some(v), f))?;
+        m0.feed(at, i, &mut |o, v| m1.feed(o, Some(v), f))?;
         if was_none {
             m1.feed(at, None, f)
         } else {
@@ -155,7 +157,7 @@ impl<I: Iterator<Item = S>, S, P: DatumPipe<Input = S>> Iterator for DatumPipeIt
                 if base_res.is_none() {
                     self.eof = true;
                 }
-                if let Err(err) = self.pipeline.feed(self.offset, base_res, &mut |v| {
+                if let Err(err) = self.pipeline.feed(self.offset, base_res, &mut |_, v| {
                     buffer.push_back(Ok(v));
                     Ok(())
                 }) {
