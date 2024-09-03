@@ -4,7 +4,10 @@ version = 3
 
 [[package]]
 name = "datum"
-version = "1.0.1"
+version = "1.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "datum-serdetest"

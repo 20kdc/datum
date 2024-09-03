@@ -64,3 +64,9 @@ pub use pipelines::*;
 #[cfg(feature = "alloc")]
 #[cfg(test)]
 mod tests;
+
+// Integrations
+
+#[cfg(feature = "_experimental")]
+#[cfg(feature = "serde")]
+pub mod de;

@@ -3,8 +3,9 @@ set -e
 cd rust
 cargo test --no-default-features --no-run
 cargo test --no-default-features -F alloc --no-run
-cargo test
-cargo doc
+cargo test --no-default-features -F _experimental,serde --no-run
+cargo test --all-features
+cargo doc --all-features
 cargo tarpaulin
 cargo build --all-features
 cd ../examples/rust/calculator

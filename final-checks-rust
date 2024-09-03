@@ -8,6 +8,10 @@ cargo clippy
 cd ../../..
 echo " -- doing final fmt/clippy/MSRV check: lib --"
 cd rust
+# 1.0.184: precompiled blob, wtf?
+# 1.0.185: fine
+# 1.0.186: suddenly you have syn in your depsgraph even if you're not using the macros at all, because something about "lockstep"
+cargo update serde --precise 1.0.185
 cargo +1.54.0-x86_64-unknown-linux-gnu build --all-features
 cargo fmt
 cargo clippy

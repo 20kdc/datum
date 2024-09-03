@@ -28,6 +28,9 @@ For further information, please see <https://github.com/20kdc/datum>.
 * `std`: Currently a breakage prevention placeholder as it isn't used right now.
 * `alloc`: For if alloc is used.
 * `detailed_errors`: Default feature that includes messages for `DatumError`s. If missing, these will be empty.
+* `serde`: Serde deserialization support. _Experimental._
+
+Experimental code is gated behind both the `_experimental` feature and the relevant feature flag.
 
 ## MSRV/Version Policy
 
