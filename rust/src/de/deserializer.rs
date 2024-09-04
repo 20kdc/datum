@@ -7,16 +7,19 @@
 
 use std::{convert::TryFrom, ops::Deref};
 
-use crate::{DatumAtom, DatumResult, DatumToken};
-use serde::{de::{EnumAccess, Error, IntoDeserializer, MapAccess, SeqAccess, VariantAccess}, forward_to_deserialize_any, Deserializer};
+use crate::{datum_error, DatumAtom, DatumError, DatumOffset, DatumResult, DatumToken};
+use serde::{de::{EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess}, forward_to_deserialize_any, Deserializer};
 
 use crate::de::error;
+
+use super::error::error_from_datum;
 
 /// A 'plain' deserializer.
 /// Expects values in sequence, fails on EOF.
 pub struct PlainDeserializer<'iterator, B: Default + Deref<Target = str>> {
     iterator: &'iterator mut dyn Iterator<Item = DatumResult<DatumToken<B>>>,
-    hold: Option<DatumToken<B>>
+    hold: Option<DatumToken<B>>,
+    last_seen_offset: DatumOffset
 }
 
 impl<'iterator, B: Default + Deref<Target = str>> PlainDeserializer<'iterator, B> {
@@ -24,7 +27,8 @@ impl<'iterator, B: Default + Deref<Target = str>> PlainDeserializer<'iterator, B
     pub fn from_iterator(iterator: &'iterator mut dyn Iterator<Item = DatumResult<DatumToken<B>>>) -> Self {
         Self {
             iterator,
-            hold: None
+            hold: None,
+            last_seen_offset: 0
         }
     }
     /// Checks if a next token exists.
@@ -35,7 +39,7 @@ impl<'iterator, B: Default + Deref<Target = str>> PlainDeserializer<'iterator, B
         } else {
             let res = self.iterator.next();
             if let Some(v) = res {
-                self.hold = Some(v.map_err(|e| error::Error::custom(e))?);
+                self.hold = Some(v.map_err(error_from_datum)?);
                 Ok(true)
             } else {
                 Ok(false)
@@ -43,24 +47,27 @@ impl<'iterator, B: Default + Deref<Target = str>> PlainDeserializer<'iterator, B
         }
     }
     /// Retrieves the next token and handles error casting.
-    fn next_token(&mut self) -> error::Result<DatumToken<B>> {
+    fn next_token(&mut self, eof_error: DatumError) -> error::Result<DatumToken<B>> {
         if let Some(token) = self.hold.take() {
             Ok(token)
         } else {
             let res = self.iterator.next();
             if let Some(v) = res {
-                v.map_err(|e| error::Error::custom(e))
+                if let Ok(tkn) = &v {
+                    self.last_seen_offset = tkn.offset();
+                }
+                v.map_err(error_from_datum)
             } else {
-                Err(error::Error::custom("EOF?"))
+                Err(error_from_datum(eof_error))
             }
         }
     }
     /// Expects a list end.
     fn expect_list_end(&mut self) -> error::Result<()> {
-        if let DatumToken::ListEnd(_) = self.next_token()? {
+        if let DatumToken::ListEnd(_) = self.next_token(datum_error!(Interrupted, self.last_seen_offset, "unexpected EOF, expected list end"))? {
             Ok(())
         } else {
-            Err(error::Error::custom("Expected list end"))
+            Err(error_from_datum(datum_error!(BadData, self.last_seen_offset, "expected list end and got something else")))
         }
     }
 }
@@ -69,9 +76,9 @@ impl<'iterator, B: Default + Deref<Target = str>> PlainDeserializer<'iterator, B
 struct AccessWrapper<'a, 'iterator, B: Default + Deref<Target = str>>(&'a mut PlainDeserializer<'iterator, B>);
 
 impl<'de, 'a, B: Default + Deref<Target = str>> SeqAccess<'de> for AccessWrapper<'a, '_, B> {
-    type Error = serde::de::value::Error;
+    type Error = error::Error;
     fn next_element_seed<T: serde::de::DeserializeSeed<'de>>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error> {
-        let token = self.0.next_token()?;
+        let token = self.0.next_token(datum_error!(Interrupted, self.0.last_seen_offset, "seq: unexpected EOF, expected next element or list end"))?;
         if let DatumToken::ListEnd(_) = token {
             // Ok, so, here's a sneaky thing that Serde does which is ?undocumented? outside of the JSON example?
             // You CANNOT rely on the sequence accessor being fully consumed.
@@ -86,7 +93,7 @@ impl<'de, 'a, B: Default + Deref<Target = str>> SeqAccess<'de> for AccessWrapper
 }
 
 impl<'de, 'a, B: Default + Deref<Target = str>> MapAccess<'de> for AccessWrapper<'a, '_, B> {
-    type Error = serde::de::value::Error;
+    type Error = error::Error;
     fn next_key_seed<K: serde::de::DeserializeSeed<'de>>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error> {
         self.next_element_seed(seed)
     }
@@ -96,7 +103,7 @@ impl<'de, 'a, B: Default + Deref<Target = str>> MapAccess<'de> for AccessWrapper
 }
 
 impl<'de, 'a, B: Default + Deref<Target = str>> EnumAccess<'de> for AccessWrapper<'a, '_, B> {
-    type Error = serde::de::value::Error;
+    type Error = error::Error;
     type Variant = Self;
     fn variant_seed<V: serde::de::DeserializeSeed<'de>>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error> {
         Ok((seed.deserialize(&mut *self.0)?, self))
@@ -104,7 +111,7 @@ impl<'de, 'a, B: Default + Deref<Target = str>> EnumAccess<'de> for AccessWrappe
 }
 
 impl<'de, 'a, B: Default + Deref<Target = str>> VariantAccess<'de> for AccessWrapper<'a, '_, B> {
-    type Error = serde::de::value::Error;
+    type Error = error::Error;
     fn unit_variant(self) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -123,14 +130,14 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de> for &'a mut Pl
     type Error = error::Error;
     // deserialize_any itself
     fn deserialize_any<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let token = self.next_token()?;
+        let token = self.next_token(datum_error!(Interrupted, self.last_seen_offset, "any: Unexpected EOF, expected value"))?;
         if let DatumToken::ListStart(_) = token {
             // consume the list start and let the SeqAccess impl. take care of the rest
             let res = visitor.visit_seq(AccessWrapper(self))?;
             self.expect_list_end()?;
             Ok(res)
         } else if let DatumToken::ListEnd(_) = token {
-            Err(error::Error::custom("unexpected list end"))
+            Err(error_from_datum(datum_error!(BadData, self.last_seen_offset, "any: unexpected list end")))
         } else {
             match DatumAtom::try_from(token) {
                 Ok(atom) => match atom {
@@ -143,7 +150,7 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de> for &'a mut Pl
                     // Also the example did it.
                     DatumAtom::Nil => visitor.visit_unit(),
                 },
-                Err(err) => Err(error::Error::custom(err))
+                Err(err) => Err(error_from_datum(err))
             }
         }
     }
@@ -157,7 +164,7 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de> for &'a mut Pl
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        let token = self.next_token()?;
+        let token = self.next_token(datum_error!(Interrupted, self.last_seen_offset, "enum: unexpected EOF, expected value"))?;
         match token {
             DatumToken::Symbol(_, text) => visitor.visit_enum(text.into_deserializer()),
             DatumToken::ListStart(_) => {
@@ -165,11 +172,11 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de> for &'a mut Pl
                 self.expect_list_end()?;
                 Ok(res)
             },
-            _ => Err(error::Error::custom("expected symbol or list-with-variant, got something else"))
+            _ => Err(error_from_datum(datum_error!(BadData, self.last_seen_offset, "enum: expected symbol or list-with-variant, got something else")))
         }
     }
     fn deserialize_option<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let token = self.next_token()?;
+        let token = self.next_token(datum_error!(Interrupted, self.last_seen_offset, "enum: unexpected EOF, expected value"))?;
         match &token {
             DatumToken::SpecialID(_, v) => {
                 if v.eq_ignore_ascii_case("nil") {
@@ -182,7 +189,7 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de> for &'a mut Pl
         visitor.visit_some(self)
     }
     fn deserialize_unit<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let token = self.next_token()?;
+        let token = self.next_token(datum_error!(Interrupted, self.last_seen_offset, "unit: unexpected EOF, expected value"))?;
         match &token {
             DatumToken::ListStart(_) => {
                 self.expect_list_end()?;
@@ -195,13 +202,13 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de> for &'a mut Pl
         }
     }
     fn deserialize_map<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        match self.next_token()? {
+        match self.next_token(datum_error!(Interrupted, self.last_seen_offset, "map: unexpected EOF, expected list"))? {
             DatumToken::ListStart(_) => {
                 let res = visitor.visit_map(AccessWrapper(self))?;
                 self.expect_list_end()?;
                 Ok(res)
             },
-            _ => Err(error::Error::custom("expected map, got something else"))
+            _ => Err(error_from_datum(datum_error!(BadData, self.last_seen_offset, "map: expected list, got something else")))
         }
     }
     // -- forwarders/simple type aliases --

@@ -69,7 +69,7 @@ impl Display for DatumError {
     }
 }
 
-/// Creates a [DatumError] formatted with the Rust file and line.
+/// Creates a [DatumError].
 /// Beware: If `detailed_errors` is off, messages are discarded.
 #[cfg(feature = "detailed_errors")]
 #[macro_export]
@@ -83,7 +83,7 @@ macro_rules! datum_error {
     };
 }
 
-/// Creates a [DatumError] formatted with the Rust file and line.
+/// Creates a [DatumError].
 /// Beware: If `detailed_errors` is off, messages are discarded.
 #[cfg(not(feature = "detailed_errors"))]
 #[macro_export]

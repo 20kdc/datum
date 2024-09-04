@@ -9,8 +9,20 @@
 //! _Added in 1.1.0._
 
 pub mod error {
+    use crate::DatumError;
+
+    /// Error type.
+    /// This was going to be a custom type, but it turns out that doing this is hilariously dangerous due to:
+    ///
+    /// * `serde::de::Error` is bounded on if-and-only-if Serde's `std` feature is enabled (IMO this is a violation of the positive feature principle)
+    /// * This bound cannot be fulfilled in `no_std` contexts without unstable features
     pub type Error = serde::de::value::Error;
+    /// Result type, nothing special here.
     pub type Result<T> = core::result::Result<T, Error>;
+    /// Converts a [DatumError] to an [Error].
+    pub(crate) fn error_from_datum(e: DatumError) -> Error {
+        serde::de::Error::custom(e)
+    }
 }
 
 mod deserializer;
