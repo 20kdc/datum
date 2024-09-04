@@ -6,14 +6,14 @@
  */
 
 use crate::{
-    DatumComposePipe, DatumDecoder, DatumPipe, DatumPipeTokenizer, DatumToken, DatumUTF8Decoder
+    DatumComposePipe, DatumDecoder, DatumPipeTokenizer, DatumUTF8Decoder
 };
 
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 
 #[cfg(feature = "alloc")]
-use crate::{DatumValue, DatumParser};
+use crate::{DatumValue, DatumParser, DatumPipe, DatumToken};
 
 // -- token outputting --
 

@@ -5,8 +5,7 @@
 
 test1 (
 	wobble 123
-	myenum Berry
+	myenum ))
 	tuple (0 1)
 	tuple_struct (0 1)
 	unit_struct #nil
-; EOF!

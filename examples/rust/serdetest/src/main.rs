@@ -7,9 +7,9 @@
 
 // This project is for testing the possibility of Serde support in Datum.
 
-use std::{collections::HashMap, env::args, fs::read_to_string};
+use std::{cell::Cell, collections::HashMap, env::args, fs::read_to_string};
 
-use datum::{DatumCharToTokenPipeline, IntoViaDatumPipe};
+use datum::{DatumCharToTokenPipeline, DatumPipe, DatumLineNumberTracker, IntoViaDatumPipe};
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
@@ -53,11 +53,16 @@ fn main() {
     assert_eq!(args.next(), None);
     let contents = read_to_string(filename).expect("filename should be readable");
     // this is slowly being worked on to be less and less alloc-using, but I think we've hit a brick wall
-    let custom: DatumCharToTokenPipeline<String> = DatumCharToTokenPipeline::default();
-    let mut iterator = contents.chars().via_datum_pipe(custom);
+    let pipeline: DatumCharToTokenPipeline<String> = DatumCharToTokenPipeline::default();
+    let line_number = Cell::new(1);
+    let mut iterator = contents.chars().via_datum_pipe(DatumLineNumberTracker::new(&line_number).compose(pipeline));
     let mut tmp = datum::de::MapRootDeserializer(datum::de::PlainDeserializer::from_iterator(&mut iterator));
-    let vec: MyExampleDocument = MyExampleDocument::deserialize(&mut tmp).unwrap();
-    for v in vec {
-        println!("{:?}", v);
+    let des = MyExampleDocument::deserialize(&mut tmp);
+    if let Err(err) = des {
+        println!("At line {}: {:?}", line_number.get(), err);
+    } else if let Ok(des) = des {
+        for v in des {
+            println!("{:?}", v);
+        }
     }
 }
