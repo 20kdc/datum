@@ -5,30 +5,42 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
+use crate::{
+    DatumComposePipe, DatumDecoder, DatumPipe, DatumPipeTokenizer, DatumToken, DatumUTF8Decoder
+};
+
+#[cfg(feature = "alloc")]
 use alloc::string::String;
 
-use crate::{
-    DatumComposePipe, DatumDecoder, DatumParser, DatumPipe, DatumStringTokenizer, DatumToken,
-    DatumUTF8Decoder, DatumValue,
-};
+#[cfg(feature = "alloc")]
+use crate::{DatumValue, DatumParser};
 
 // -- token outputting --
 
-/// Byte to token parsing pipeline.
-pub fn datum_byte_to_token_pipeline() -> impl DatumPipe<Input = u8, Output = DatumToken<String>> {
-    let utf2chr = DatumComposePipe(DatumUTF8Decoder::default(), DatumDecoder::default());
+/// Char to token parsing pipeline (custom storage)
+/// _Added in 1.1.0._
+pub type DatumCharToTokenPipeline<B> = DatumComposePipe<DatumDecoder, DatumPipeTokenizer<B>>;
 
-    DatumComposePipe(utf2chr, DatumStringTokenizer::default())
+/// Byte to token parsing pipeline (custom storage)
+/// _Added in 1.1.0._
+pub type DatumByteToTokenPipeline<B> = DatumComposePipe<DatumUTF8Decoder, DatumCharToTokenPipeline<B>>;
+
+/// Byte to token parsing pipeline.
+#[cfg(feature = "alloc")]
+pub fn datum_byte_to_token_pipeline() -> impl DatumPipe<Input = u8, Output = DatumToken<String>> {
+    DatumByteToTokenPipeline::default()
 }
 
 /// Character to token parsing pipeline.
+#[cfg(feature = "alloc")]
 pub fn datum_char_to_token_pipeline() -> impl DatumPipe<Input = char, Output = DatumToken<String>> {
-    DatumComposePipe(DatumDecoder::default(), DatumStringTokenizer::default())
+    DatumCharToTokenPipeline::default()
 }
 
 // -- value outputting --
 
 /// Byte to value parsing pipeline.
+#[cfg(feature = "alloc")]
 pub fn datum_byte_to_value_pipeline() -> impl DatumPipe<Input = u8, Output = DatumValue> {
     let tokenizer = datum_byte_to_token_pipeline();
 
@@ -36,6 +48,7 @@ pub fn datum_byte_to_value_pipeline() -> impl DatumPipe<Input = u8, Output = Dat
 }
 
 /// Char to value parsing pipeline.
+#[cfg(feature = "alloc")]
 pub fn datum_char_to_value_pipeline() -> impl DatumPipe<Input = char, Output = DatumValue> {
     let tokenizer = datum_char_to_token_pipeline();
 

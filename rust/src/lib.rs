@@ -54,9 +54,9 @@ mod ast;
 #[cfg(feature = "alloc")]
 pub use ast::*;
 
-#[cfg(feature = "alloc")]
+// Pipelines (partially alloc-only)
+
 mod pipelines;
-#[cfg(feature = "alloc")]
 pub use pipelines::*;
 
 // Big test battery

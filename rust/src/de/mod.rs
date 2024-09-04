@@ -5,6 +5,9 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
+//! [serde::Deserializer] implementation and supporting types.
+//! _Added in 1.1.0._
+
 pub mod error {
     pub type Error = serde::de::value::Error;
     pub type Result<T> = core::result::Result<T, Error>;

@@ -163,6 +163,15 @@ pub trait DatumPipe {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct DatumComposePipe<A: DatumPipe, B: DatumPipe<Input = A::Output>>(pub A, pub B);
 
+// Usually pipelines are entirely type-described, so implement Default where possible.
+// This allows the idiom `let x: PipelineType = PipelineType::default();`.
+// _Added in 1.1.0._
+impl<A: DatumPipe + Default, B: DatumPipe<Input = A::Output> + Default> Default for DatumComposePipe<A, B> {
+    fn default() -> Self {
+        DatumComposePipe(A::default(), B::default())
+    }
+}
+
 impl<A: DatumPipe, B: DatumPipe<Input = A::Output>> DatumPipe for DatumComposePipe<A, B> {
     type Input = A::Input;
     type Output = B::Output;
