@@ -7,7 +7,7 @@
 
 // This project is for testing the possibility of Serde support in Datum.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, env::args, fs::read_to_string};
 
 use datum::{DatumCharToTokenPipeline, IntoViaDatumPipe};
 use serde::Deserialize;
@@ -47,9 +47,14 @@ struct MyExampleType {
 type MyExampleDocument = HashMap<String, MyExampleType>;
 
 fn main() {
+    let mut args = args();
+    _ = args.next();
+    let filename = args.next().expect("filename should be given");
+    assert_eq!(args.next(), None);
+    let contents = read_to_string(filename).expect("filename should be readable");
     // this is slowly being worked on to be less and less alloc-using, but I think we've hit a brick wall
     let custom: DatumCharToTokenPipeline<String> = DatumCharToTokenPipeline::default();
-    let mut iterator = include_str!("../example.scm").chars().via_datum_pipe(custom);
+    let mut iterator = contents.chars().via_datum_pipe(custom);
     let mut tmp = datum::de::MapRootDeserializer(datum::de::PlainDeserializer::from_iterator(&mut iterator));
     let vec: MyExampleDocument = MyExampleDocument::deserialize(&mut tmp).unwrap();
     for v in vec {
