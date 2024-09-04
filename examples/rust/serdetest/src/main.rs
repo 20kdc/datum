@@ -9,31 +9,35 @@
 
 use std::{cell::Cell, collections::HashMap, env::args, fs::read_to_string};
 
-use datum::{DatumCharToTokenPipeline, DatumPipe, DatumLineNumberTracker, IntoViaDatumPipe};
-use serde::Deserialize;
+use datum::{serde::ser::{Style, PlainSerializer}, DatumCharToTokenPipeline, DatumLineNumberTracker, DatumPipe, IntoViaDatumPipe};
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 enum MyEnum {
     Apple,
     Berry
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[allow(dead_code)]
 enum MyComplexEnum {
     Stuff,
-    ThingCount(i32)
+    ThingCount(i32),
+    TupleVariant(i32, i32),
+    StructVariant {
+        a: i32
+    }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[allow(dead_code)]
 struct MyTupleStruct(i32, i32);
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[allow(dead_code)]
 struct MyUnitStruct;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[allow(dead_code)]
 struct MyExampleType {
     pub wobble: i32,
@@ -56,13 +60,19 @@ fn main() {
     let pipeline: DatumCharToTokenPipeline<String> = DatumCharToTokenPipeline::default();
     let line_number = Cell::new(1);
     let mut iterator = contents.chars().via_datum_pipe(DatumLineNumberTracker::new(&line_number).compose(pipeline));
-    let mut tmp = datum::de::MapRootDeserializer(datum::de::PlainDeserializer::from_iterator(&mut iterator));
+    let mut tmp = datum::serde::de::MapRootDeserializer(datum::serde::de::PlainDeserializer::from_iterator(&mut iterator));
     let des = MyExampleDocument::deserialize(&mut tmp);
     if let Err(err) = des {
         println!("At line {}: {:?}", line_number.get(), err);
     } else if let Ok(des) = des {
-        for v in des {
+        for v in &des {
             println!("{:?}", v);
         }
+        println!("converting back...");
+        let mut text = String::new();
+        let mut ser = PlainSerializer::new(&mut text);
+        ser.style = Style::Indented;
+        des.serialize(&mut ser).unwrap();
+        println!("{}", text);
     }
 }

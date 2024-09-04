@@ -69,4 +69,4 @@ mod tests;
 
 #[cfg(feature = "_experimental")]
 #[cfg(feature = "serde")]
-pub mod de;
+pub mod serde;

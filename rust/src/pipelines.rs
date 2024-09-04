@@ -5,15 +5,13 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use crate::{
-    DatumComposePipe, DatumDecoder, DatumPipeTokenizer, DatumUTF8Decoder
-};
+use crate::{DatumComposePipe, DatumDecoder, DatumPipeTokenizer, DatumUTF8Decoder};
 
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 
 #[cfg(feature = "alloc")]
-use crate::{DatumValue, DatumParser, DatumPipe, DatumToken};
+use crate::{DatumParser, DatumPipe, DatumToken, DatumValue};
 
 // -- token outputting --
 
@@ -23,7 +21,8 @@ pub type DatumCharToTokenPipeline<B> = DatumComposePipe<DatumDecoder, DatumPipeT
 
 /// Byte to token parsing pipeline (custom storage)
 /// _Added in 1.1.0._
-pub type DatumByteToTokenPipeline<B> = DatumComposePipe<DatumUTF8Decoder, DatumCharToTokenPipeline<B>>;
+pub type DatumByteToTokenPipeline<B> =
+    DatumComposePipe<DatumUTF8Decoder, DatumCharToTokenPipeline<B>>;
 
 /// Byte to token parsing pipeline.
 #[cfg(feature = "alloc")]

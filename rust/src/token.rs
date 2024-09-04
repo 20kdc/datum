@@ -190,6 +190,32 @@ impl<B: Deref<Target = str>> Display for DatumToken<B> {
     }
 }
 
+/// Writes a Datum string where the contents come from a [core::fmt::Display] type.
+///
+/// _Added in 1.1.0._
+pub fn datum_write_display_as_string<T: core::fmt::Display + ?Sized>(
+    f: &mut dyn Write,
+    value: &T,
+) -> core::fmt::Result {
+    f.write_char('"')?;
+    write!(DatumStringContentWriter(f), "{}", value)?;
+    f.write_char('"')
+}
+
+/// Used by [datum_write_display_as_string].
+struct DatumStringContentWriter<'writer>(&'writer mut dyn Write);
+impl<'writer> Write for DatumStringContentWriter<'writer> {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        for v in s.chars() {
+            self.write_char(v)?;
+        }
+        Ok(())
+    }
+    fn write_char(&mut self, c: char) -> std::fmt::Result {
+        DatumChar::string_content(c).write(self.0)
+    }
+}
+
 /// Internal structure to determine if Rust didn't write any indicator this number is intended to be a float.
 struct DatumFloatObserver<'a>(&'a mut dyn Write, bool);
 

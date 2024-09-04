@@ -9,9 +9,10 @@ use core::{fmt::Write, ops::Deref};
 
 use crate::{DatumAtom, DatumToken, DatumTokenType};
 
+/// The states a Datum writer can be in.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DatumWriterState {
-    /// No indentation.
+    /// No indentation or spacing to emit.
     None,
     /// Queued indentation.
     QueuedIndent,

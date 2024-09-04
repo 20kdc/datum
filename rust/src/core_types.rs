@@ -167,7 +167,9 @@ pub struct DatumComposePipe<A: DatumPipe, B: DatumPipe<Input = A::Output>>(pub A
 // Usually pipelines are entirely type-described, so implement Default where possible.
 // This allows the idiom `let x: PipelineType = PipelineType::default();`.
 // _Added in 1.1.0._
-impl<A: DatumPipe + Default, B: DatumPipe<Input = A::Output> + Default> Default for DatumComposePipe<A, B> {
+impl<A: DatumPipe + Default, B: DatumPipe<Input = A::Output> + Default> Default
+    for DatumComposePipe<A, B>
+{
     fn default() -> Self {
         DatumComposePipe(A::default(), B::default())
     }
@@ -286,7 +288,10 @@ impl<I, V: Iterator<Item = I> + Sized> IntoViaDatumPipe<I> for V {
 /// // And we know it happened on line 2.
 /// assert_eq!(line_number.get(), 2);
 /// ```
-pub struct DatumLineNumberTracker<'line_number, V: Copy + Into<u32>>(&'line_number Cell<u32>, PhantomData<V>);
+pub struct DatumLineNumberTracker<'line_number, V: Copy + Into<u32>>(
+    &'line_number Cell<u32>,
+    PhantomData<V>,
+);
 impl<'line_number, V: Copy + Into<u32>> DatumLineNumberTracker<'line_number, V> {
     /// Creates a new DatumLineNumberTracker with the given line number storage.
     pub fn new(ln: &'line_number Cell<u32>) -> Self {

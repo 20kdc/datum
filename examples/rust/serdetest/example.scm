@@ -13,8 +13,8 @@ test1 (
 		Stuff
 		(Stuff)
 		(ThingCount 1)
-		(ThingCount 2)
-		(ThingCount 16)
+		(TupleVariant 2 3)
+		(StructVariant a 16)
 	)
 )
 test2 (

@@ -80,7 +80,9 @@ The Serde mapping defines how Datum interacts with the [serde](https://serde.rs/
 
 In practice, I expect this to allow quick and immediate use of Datum for configuration files.
 
-### Root Deserializers
+### Deserialization
+
+#### Root Deserializers
 
 There are three root deserializers. One is the 'standard' deserializer, and the other two affect the mapping significantly.
 
@@ -88,7 +90,7 @@ There are three root deserializers. One is the 'standard' deserializer, and the 
 * The 'seq' format implements `deserialize_any` via `visitor.visit_seq`, forwards all other methods to that, and has a `SeqAccess` which continues returning values until EOF is detected (which is considered the end of the sequence). It is intended for the List document format.
 * The 'map' format implements `deserialize_any` via `visitor.visit_map`, forwards all other methods to that, and has a `MapAccess` which is implemented more or less the same as the 'seq' format. It is intended for the Map document format.
 
-### 'Any'
+#### 'Any'
 
 This covers the generic 'dynamically typed' case, and essentially produces a Datum AST in Serde format.
 
@@ -106,7 +108,7 @@ These deserialization types are treated as equivalent to `deserialize_any`:
 * This: `ignored_any`
 * Unsupported things: `bytes byte_buf`
 
-### Enum
+#### Enum
 
 If the next token is a symbol, that symbol is treated as a unit variant.
 
@@ -114,11 +116,11 @@ If it is a list start, then the syntax `(variant ...)` is expected.
 
 If neither a symbol or a list start is found, the value is parsed as per `any`.
 
-### Option
+#### Option
 
 If the next token is `#nil`, then `None` is assumed. Otherwise, `Some` is assumed, and the token is held for parsing the value within.
 
-### Unit
+#### Unit
 
 A list start is checked for. If it is found, a list end is expected, and that's the unit.
 
@@ -128,7 +130,7 @@ If a list start is not found, then the value is parsed as per `any`.
 
 It is important that `#nil` and `()` both be valid ways of writing `unit`; the former works in `any` contexts and the latter is valid in Options.
 
-### Map
+#### Map
 
 A list start is checked for. If it is found, a map is visited as per the document layout description above.
 
@@ -136,6 +138,22 @@ If a list start is not found, then the value is parsed as per `any`.
 
 `struct` is treated equivalently to `map`.
 
-### Newtype Struct
+#### Newtype Struct
 
 `newtype_struct` is simply visited without anything actually parsed by the handler.
+
+### Serialization
+
+Serialization has been handled with reference to the Serde implementations of `Deserialize`, to ensure that they deserialize cleanly.
+
+* The bool/i/u/f types are trivial and don't need describing in detail, except that i128/u128 are not supported, and u64 is converted to i64.
+* `serialize_char` is implemented as `self.collect_str(&v)`, producing the character as a string, which Serde can read.
+* Unit structs are serialized as units.
+* Newtype structs are serialized as their interiors.
+* `None` is `#nil` and `Some` is pass-through. Correspondingly, `()` is `()` (as `#nil` would be ambiguous).
+* Enum unit variants are written as symbols, newtype variants are written as `(variant value)`, tuple variants are written as `(variant value...)`, struct variants are `(variant key value...)`.
+* Structs are written like maps, but the keys are written as symbols.
+* Sequences, tuples, and tuple structs are just lists.
+* Maps are lists where the contents are as per the document layout description above.
+* Strings are strings. That's all.
+* Byte arrays cannot be serialized at present.

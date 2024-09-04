@@ -5,7 +5,8 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-//! [serde::Deserializer] implementation and supporting types.
+//! Serde serializer/deserializer implementation and supporting types.
+//!
 //! _Added in 1.1.0._
 
 pub mod error {
@@ -16,16 +17,20 @@ pub mod error {
     ///
     /// * `serde::de::Error` is bounded on if-and-only-if Serde's `std` feature is enabled (IMO this is a violation of the positive feature principle)
     /// * This bound cannot be fulfilled in `no_std` contexts without unstable features
+    ///
+    /// _Added in 1.1.0._
     pub type Error = serde::de::value::Error;
     /// Result type, nothing special here.
+    ///
+    /// _Added in 1.1.0._
     pub type Result<T> = core::result::Result<T, Error>;
     /// Converts a [DatumError] to an [Error].
+    ///
+    /// _Added in 1.1.0._
     pub(crate) fn error_from_datum(e: DatumError) -> Error {
         serde::de::Error::custom(e)
     }
 }
 
-mod deserializer;
-pub use deserializer::*;
-mod seqmaproot;
-pub use seqmaproot::*;
+pub mod de;
+pub mod ser;
