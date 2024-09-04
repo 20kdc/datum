@@ -106,7 +106,7 @@ These deserialization types are treated as equivalent to `deserialize_any`:
 * Strings: `str string identifier`
 * Anything that would end up a `seq`: `seq tuple tuple_struct`
 * This: `ignored_any`
-* Unsupported things: `bytes byte_buf`
+* Unsupported things: `bytes byte_buf` (these would require `Vec` to support; Serde has no streaming byte buffer deserialization).
 
 #### Enum
 
