@@ -17,27 +17,28 @@ In order to allow use in diverse environments, it attempts to follow some key ru
 * `#![no_std]`
 * `#![forbid(unsafe_code)]`
 * completely public-domain
-* no external dependencies, but without trying to reinvent the wheel _too_ hard
-
-With that said, it doesn't implement `serde` support at present.
+* no mandatory external dependencies except `libcore`, but without trying to reinvent the wheel _too_ hard
+	* optional dependencies are used if it's with good reason, i.e. `serde`
 
 For further information, please see <https://github.com/20kdc/datum>.
 
 ## Features
 
-* `std`: Currently a breakage prevention placeholder as it isn't used right now.
-* `alloc`: For if alloc is used.
+* `std`: Presently mainly for `std::error::Error` support, but may provide additional utilities in future. Mainly, implies `alloc`.
+* `alloc`: `DatumStringTokenizer`, `DatumValue` (AST), `DatumParser` (parses tokens into an AST)
 * `detailed_errors`: Default feature that includes messages for `DatumError`s. If missing, these will be empty.
-* `serde`: Serde deserialization support. _Experimental._
+* `serde`: Serde support.
 
-Experimental code is gated behind both the `_experimental` feature and the relevant feature flag.
+Experimental code is gated behind the `_experimental` feature and may be gated behind additional relevant feature flags.
 
 ## MSRV/Version Policy
 
 Semantic versioning is in use. However, if at all possible, the major version will never be incremented. If alternate APIs must be created to avoid breaking compatibility, then alternate APIs will be created.
 
+_In the unlikely event that Serde major-versions, the policy will be 'wait-and-see'._
+
 The MSRV is `1.54.0`.
 
 If it comes down to breaking API compatibility or breaking MSRV compatibility, then the MSRV will be updated without a major version bump.
 
-However, _this really shouldn't happen._ The crate should not significantly grow in scope (at most, possibly Serde support), and the decoupled structure should stop issues like lifetimes getting entangled.
+However, _this really shouldn't happen._ The crate should not significantly grow in scope, and the decoupled structure should stop issues like lifetimes getting entangled.

@@ -67,6 +67,5 @@ mod tests;
 
 // Integrations
 
-#[cfg(feature = "_experimental")]
 #[cfg(feature = "serde")]
 pub mod serde;

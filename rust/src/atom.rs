@@ -18,6 +18,7 @@ use crate::{datum_error, DatumError, DatumResult, DatumToken};
 /// This enum also contains the functions that convert between tokens and atoms.
 /// You can think of it as the bridge between Datum's tokenization model and value model.
 /// Accordingly, it does not contain offsets.
+///
 /// Implements [Hash] despite potentially containing floats; if this is a problem for your application then don't use the [Hash] implementation.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
 pub enum DatumAtom<B: Deref<Target = str>> {
