@@ -34,3 +34,13 @@ pub mod error {
 
 pub mod de;
 pub mod ser;
+
+#[cfg(feature = "alloc")]
+#[cfg(feature = "_serde_test_features")]
+#[cfg(test)]
+mod de_tests;
+
+#[cfg(feature = "alloc")]
+#[cfg(feature = "_serde_test_features")]
+#[cfg(test)]
+mod ser_tests;

@@ -1,6 +1,12 @@
 #!/bin/sh
 set -e
 ./test-rust
+echo " -- exhaustive build --"
+cd rust
+rustc gen-exhaustive-build.rs
+./gen-exhaustive-build > exhaustive-build.sh
+. ./exhaustive-build.sh
+cd ..
 echo " -- doing final fmt/clippy : calculator --"
 cd examples/rust/calculator
 cargo fmt

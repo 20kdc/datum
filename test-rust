@@ -1,12 +1,16 @@
 #!/bin/sh
 set -e
 cd rust
+# check the expected configs
+# tests are expected to auto-disable if they aren't usable!
 cargo test --no-default-features --no-run
+cargo test --no-default-features -F detailed_errors --no-run
 cargo test --no-default-features -F alloc --no-run
 cargo test --no-default-features -F _experimental,serde --no-run
+cargo test --no-default-features -F _experimental,serde,alloc --no-run
 cargo test --all-features
 cargo doc --all-features
-cargo tarpaulin
+cargo tarpaulin --all-features
 cargo build --all-features
 cd ../examples/rust/calculator
 cargo build

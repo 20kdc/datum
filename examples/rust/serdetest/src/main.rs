@@ -70,8 +70,7 @@ fn main() {
         }
         println!("converting back...");
         let mut text = String::new();
-        let mut ser = PlainSerializer::new(&mut text);
-        ser.style = Style::Indented;
+        let mut ser = PlainSerializer::new(&mut text, Style::Indented);
         des.serialize(&mut ser).unwrap();
         println!("{}", text);
     }

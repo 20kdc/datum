@@ -13,7 +13,11 @@ std = ["alloc"]
 alloc = []
 detailed_errors = []
 # This feature is experimental and subject to change without warning.
+# It is not public API.
 _experimental = []
+# This feature is used for the test suite to improve error messages.
+# It is not public API.
+_serde_test_features = ["serde/std", "serde/derive"]
 
 [dependencies]
 serde = { version = "^1.0.0", optional = true, default-features = false }

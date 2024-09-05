@@ -110,6 +110,8 @@ impl<B: Deref<Target = str>> Display for DatumAtom<B> {
 
 impl<B: Deref<Target = str>> Hash for DatumAtom<B> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        // **Notice: The 'type ID namespace' is shared with DatumValue.**
+        // Specifically, type 6 goes to lists.
         match self {
             Self::String(s) => {
                 state.write_u8(0);

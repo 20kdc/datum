@@ -19,6 +19,8 @@ use crate::serde::de::PlainDeserializer;
 /// Sequence-root deserializer.
 /// This treats the file as being a sequence of values, and then whatever comes up in the file is treated as elements of that sequence.
 /// In practice, this and [MapRootDeserializer] are the two 'canonical' Datum document forms.
+///
+/// _Added in 1.1.0._
 pub struct SeqRootDeserializer<'iterator, B: Default + Deref<Target = str>>(
     pub PlainDeserializer<'iterator, B>,
 );
@@ -56,6 +58,8 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
 /// Map-root deserializer.
 /// This treats the file as being a sequence of map entry pairs.
 /// In practice, this and [SeqRootDeserializer] are the two 'canonical' Datum document forms.
+///
+/// _Added in 1.1.0._
 pub struct MapRootDeserializer<'iterator, B: Default + Deref<Target = str>>(
     pub PlainDeserializer<'iterator, B>,
 );

@@ -7,6 +7,10 @@
 
 //! Tests! Sent into a separate directory so they can be filtered from cloc results.
 
+use std::convert::TryFrom;
+use std::hash::{DefaultHasher, Hasher};
+use core::hash::Hash;
+
 use crate::{DatumChar, DatumCharClass, DatumDecoder, DatumUTF8Decoder};
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -43,10 +47,13 @@ fn do_roundtrip_test(input: &str, output: &str) {
     // so, fun fact, in all the refactors, a bug snuck in where starting any list would enable the parse error flag
     let mut out_str = String::new();
     let mut writer = DatumWriter::default();
+    let mut hasher = DefaultHasher::default();
     for v in out {
+        v.hash(&mut hasher);
         v.write_to(&mut out_str, &mut writer).unwrap();
         writer.write_newline(&mut out_str).unwrap();
     }
+    let hash1 = hasher.finish();
     assert_eq!(out_str, output);
     // --- same again but with bytes
     let mut dtparse = datum_byte_to_value_pipeline();
@@ -56,11 +63,15 @@ fn do_roundtrip_test(input: &str, output: &str) {
         .unwrap();
     let mut out_str = String::new();
     let mut writer = DatumWriter::default();
+    let mut hasher = DefaultHasher::default();
     for v in &out {
+        v.hash(&mut hasher);
         v.write_to(&mut out_str, &mut writer).unwrap();
         writer.write_newline(&mut out_str).unwrap();
     }
+    let hash2 = hasher.finish();
     assert_eq!(out_str, output);
+    assert_eq!(hash1, hash2);
     // --- one final time, with feeling: iterator test ---
     assert_eq!(
         out_str
@@ -128,6 +139,10 @@ fn roundtrip_tests() {
     do_roundtrip_test("#t", "#t\n");
     do_roundtrip_test("; line comment\n", "");
     do_roundtrip_test("\n", "");
+
+    // Hexints
+    do_roundtrip_test("#x100", "256\n");
+    parser_should_error("#xZ");
 
     tokenizer_should_error_eof("\"a");
 
@@ -280,6 +295,7 @@ fn all_decoder_test_cases() {
     // --
 
     // failure tests
+    decoder_should_fail("\\\n");
     decoder_should_fail("\\x-");
     decoder_should_fail("\\xFFFFFF;");
     decoder_should_not_allow_eof("\\");
@@ -316,4 +332,12 @@ fn byte_decoder_tests() {
     byte_decoder_should_fail(&[0xC2, 0x80, 0x80, 0x80, 0x80]);
     // interrupted 'characters'
     byte_decoder_should_fail(&[0xC2, 0xC2]);
+}
+
+#[test]
+fn these_cannot_be_atomized() {
+    let tkn: DatumToken<&str> = DatumToken::ListStart(0);
+    DatumAtom::try_from(tkn).unwrap_err();
+    let tkn: DatumToken<&str> = DatumToken::ListEnd(0);
+    DatumAtom::try_from(tkn).unwrap_err();
 }

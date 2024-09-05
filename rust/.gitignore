@@ -1,2 +1,4 @@
+gen-exhaustive-build
+exhaustive-build.sh
 tarpaulin-report.html
 cobertura.xml

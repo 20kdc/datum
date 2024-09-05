@@ -18,6 +18,8 @@ use crate::serde::error::error_from_datum;
 
 /// A 'plain' deserializer.
 /// Expects values in sequence, fails on EOF.
+///
+/// _Added in 1.1.0._
 pub struct PlainDeserializer<'iterator, B: Default + Deref<Target = str>> {
     iterator: &'iterator mut dyn Iterator<Item = DatumResult<DatumToken<B>>>,
     hold: Option<DatumToken<B>>,

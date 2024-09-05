@@ -157,3 +157,14 @@ Serialization has been handled with reference to the Serde implementations of `D
 * Maps are lists where the contents are as per the document layout description above.
 * Strings are strings. That's all.
 * Byte arrays cannot be serialized at present.
+
+For `RootSerializer`, the rules change somewhat:
+
+* The bool/i/u/f types, along with strings, units, and unit structs, are forwarded as-is to `PlainSerializer`.
+* `None` is not supported because in this form, `None` and `Some(vec![])` are ambiguous. `Some` is supported by simply serializing whatever's inside.
+* Enums are always forwarded with essentially an "unwrapped `()` form", i.e. `(variant value)` becomes `variant value`.
+* Structs, maps, sequences, tuples, and tuple structs all become their "unwrapped `()` forms".
+* A key difference in formatting is that `PlainSerializer` attempts to indent seqs, maps, and structs (and struct variants), but not tuples (or tuple variants, or newtype variants, etc.). `RootSerializer` _always_ adds newlines between each root-level element.
+* Sequence/tuple elements, struct/map keys/values, etc. are passed to `PlainSerializer`; the rule of thumb is that `RootSerializer` removes the outermost `()` pair from a value.
+
+_A key implication here is that for `RootSerializer`, the end of the value is delimited by the end of the file._
