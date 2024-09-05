@@ -55,7 +55,9 @@ impl<'a> Serializer for &'a mut RootSerializer<'_> {
         self.0.fmt_seq_newline()
     }
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        Err(error::Error::custom("not a supported type for datum's RootSerializer"))
+        Err(error::Error::custom(
+            "not a supported type for datum's RootSerializer",
+        ))
     }
     // -- Enum --
     fn serialize_newtype_variant<T: serde::Serialize + ?Sized>(

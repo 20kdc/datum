@@ -241,6 +241,7 @@ impl Write for DatumFloatObserver<'_> {
 #[derive(Clone, Default, Debug)]
 pub struct DatumPipeTokenizer<B: Write + Deref<Target = str> + Default>(B, DatumTokenizer);
 
+/// The 'default' [String]-based tokenizer you usually want.
 #[cfg(feature = "alloc")]
 pub type DatumStringTokenizer = DatumPipeTokenizer<String>;
 

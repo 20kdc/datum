@@ -210,7 +210,10 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
             }
         }
     }
-    fn deserialize_u64<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+    fn deserialize_u64<V: serde::de::Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         let token = self.next_token(datum_error!(
             Interrupted,
             self.last_seen_offset,
@@ -221,7 +224,7 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
             _ => {
                 self.hold = Some(token);
                 self.deserialize_any(visitor)
-            },
+            }
         }
     }
     fn is_human_readable(&self) -> bool {
@@ -314,7 +317,11 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
             ))),
         }
     }
-    fn deserialize_tuple<V: serde::de::Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error> {
+    fn deserialize_tuple<V: serde::de::Visitor<'de>>(
+        self,
+        _len: usize,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         self.deserialize_any(visitor)
     }
     deserializer_invariants!();
@@ -344,7 +351,10 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
     ) -> Result<V::Value, Self::Error> {
         self.0.deserialize_any(visitor)
     }
-    fn deserialize_u64<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+    fn deserialize_u64<V: serde::de::Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         self.0.deserialize_u64(visitor)
     }
     fn deserialize_option<V: serde::de::Visitor<'de>>(
@@ -375,10 +385,17 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
         visitor.visit_map(AccessWrapper(&mut self.0))
     }
     // -- forwarders/simple type aliases --
-    fn deserialize_seq<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+    fn deserialize_seq<V: serde::de::Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         visitor.visit_seq(AccessWrapper(&mut self.0))
     }
-    fn deserialize_tuple<V: serde::de::Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error> {
+    fn deserialize_tuple<V: serde::de::Visitor<'de>>(
+        self,
+        _len: usize,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         self.deserialize_seq(visitor)
     }
     deserializer_invariants!();

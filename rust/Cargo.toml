@@ -15,7 +15,7 @@ detailed_errors = []
 # This feature is experimental and subject to change without warning.
 # It is not public API.
 _experimental = []
-# This feature is used for the test suite to improve error messages.
+# This feature is used for the test suite.
 # It is not public API.
 _serde_test_features = ["serde/std", "serde/derive"]
 

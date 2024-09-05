@@ -63,7 +63,7 @@ impl Hash for DatumValue {
         match self {
             Self::Atom(atm) => {
                 atm.hash(state);
-            },
+            }
             Self::List(vec) => {
                 // **Notice: The 'type ID namespace' is shared with DatumAtom.**
                 state.write_u8(6);

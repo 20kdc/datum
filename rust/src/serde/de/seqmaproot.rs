@@ -35,23 +35,39 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
     fn deserialize_u64<V: serde::de::Visitor<'de>>(self, visitor: V) -> error::Result<V::Value> {
         self.0.deserialize_u64(visitor)
     }
-    fn deserialize_option<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+    fn deserialize_option<V: serde::de::Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         if self.0.has_next_token()? {
             visitor.visit_some(self)
         } else {
             visitor.visit_none()
         }
     }
-    fn deserialize_unit<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+    fn deserialize_unit<V: serde::de::Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         self.0.deserialize_unit(visitor)
     }
-    fn deserialize_seq<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+    fn deserialize_seq<V: serde::de::Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         visitor.visit_seq(AccessWrapper(self))
     }
-    fn deserialize_tuple<V: serde::de::Visitor<'de>>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error> {
+    fn deserialize_tuple<V: serde::de::Visitor<'de>>(
+        self,
+        len: usize,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         visitor.visit_seq(TupleAccess(self, len))
     }
-    fn deserialize_map<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+    fn deserialize_map<V: serde::de::Visitor<'de>>(
+        self,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
         visitor.visit_map(AccessWrapper(self))
     }
     fn deserialize_enum<V: serde::de::Visitor<'de>>(
@@ -71,12 +87,10 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
 /// special case problem solver
 struct TupleAccess<'a, 'iterator, B: Default + Deref<Target = str>>(
     &'a mut RootDeserializer<'iterator, B>,
-    usize
+    usize,
 );
 
-impl<'de, 'a, B: Default + Deref<Target = str>> SeqAccess<'de>
-    for TupleAccess<'a, '_, B>
-{
+impl<'de, 'a, B: Default + Deref<Target = str>> SeqAccess<'de> for TupleAccess<'a, '_, B> {
     type Error = error::Error;
     fn next_element_seed<T: serde::de::DeserializeSeed<'de>>(
         &mut self,
@@ -84,7 +98,7 @@ impl<'de, 'a, B: Default + Deref<Target = str>> SeqAccess<'de>
     ) -> error::Result<Option<T::Value>> {
         if self.1 > 0 {
             self.1 -= 1;
-            seed.deserialize(&mut self.0.0).map(Some)
+            seed.deserialize(&mut self.0 .0).map(Some)
         } else {
             Ok(None)
         }
@@ -96,32 +110,28 @@ struct AccessWrapper<'a, 'iterator, B: Default + Deref<Target = str>>(
     &'a mut RootDeserializer<'iterator, B>,
 );
 
-impl<'de, 'a, B: Default + Deref<Target = str>> SeqAccess<'de>
-    for AccessWrapper<'a, '_, B>
-{
+impl<'de, 'a, B: Default + Deref<Target = str>> SeqAccess<'de> for AccessWrapper<'a, '_, B> {
     type Error = error::Error;
     fn next_element_seed<T: serde::de::DeserializeSeed<'de>>(
         &mut self,
         seed: T,
     ) -> error::Result<Option<T::Value>> {
-        if self.0.0.has_next_token()? {
-            seed.deserialize(&mut self.0.0).map(Some)
+        if self.0 .0.has_next_token()? {
+            seed.deserialize(&mut self.0 .0).map(Some)
         } else {
             Ok(None)
         }
     }
 }
 
-impl<'de, 'a, B: Default + Deref<Target = str>> MapAccess<'de>
-    for AccessWrapper<'a, '_, B>
-{
+impl<'de, 'a, B: Default + Deref<Target = str>> MapAccess<'de> for AccessWrapper<'a, '_, B> {
     type Error = error::Error;
     fn next_key_seed<T: serde::de::DeserializeSeed<'de>>(
         &mut self,
         seed: T,
     ) -> error::Result<Option<T::Value>> {
-        if self.0.0.has_next_token()? {
-            seed.deserialize(&mut self.0.0).map(Some)
+        if self.0 .0.has_next_token()? {
+            seed.deserialize(&mut self.0 .0).map(Some)
         } else {
             Ok(None)
         }
@@ -130,23 +140,22 @@ impl<'de, 'a, B: Default + Deref<Target = str>> MapAccess<'de>
         &mut self,
         seed: V,
     ) -> error::Result<V::Value> {
-        seed.deserialize(&mut self.0.0)
+        seed.deserialize(&mut self.0 .0)
     }
 }
 
-impl<'de, 'a, B: Default + Deref<Target = str>> EnumAccess<'de>
-    for AccessWrapper<'a, '_, B>
-{
+impl<'de, 'a, B: Default + Deref<Target = str>> EnumAccess<'de> for AccessWrapper<'a, '_, B> {
     type Error = error::Error;
     type Variant = Self;
-    fn variant_seed<V: serde::de::DeserializeSeed<'de>>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error> {
-        Ok((seed.deserialize(&mut self.0.0)?, self))
+    fn variant_seed<V: serde::de::DeserializeSeed<'de>>(
+        self,
+        seed: V,
+    ) -> Result<(V::Value, Self::Variant), Self::Error> {
+        Ok((seed.deserialize(&mut self.0 .0)?, self))
     }
 }
 
-impl<'de, 'a, B: Default + Deref<Target = str>> VariantAccess<'de>
-    for AccessWrapper<'a, '_, B>
-{
+impl<'de, 'a, B: Default + Deref<Target = str>> VariantAccess<'de> for AccessWrapper<'a, '_, B> {
     type Error = error::Error;
     fn unit_variant(self) -> Result<(), Self::Error> {
         Ok(())

@@ -18,8 +18,13 @@ static FLAGS: &'static [&'static str] = &[
 
 fn main() {
     let max: u32 = 1 << FLAGS.len();
+    print!("echo -n \"[");
+    for _i in 0..max {
+        print!(" ");
+    }
+    println!("]\\r[\"");
     for i in 0..max {
-        print!("cargo build --no-default-features");
+        print!("cargo build -q --no-default-features");
         let mut first_flag = true;
         for j in 0..FLAGS.len() {
             let flag: u32 = 1 << j;
@@ -34,5 +39,7 @@ fn main() {
             }
         }
         println!();
+        println!("echo -n .");
     }
+    println!("echo");
 }

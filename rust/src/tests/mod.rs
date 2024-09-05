@@ -7,12 +7,11 @@
 
 //! Tests! Sent into a separate directory so they can be filtered from cloc results.
 
+use core::hash::Hash;
 use std::convert::TryFrom;
 use std::hash::{DefaultHasher, Hasher};
-use core::hash::Hash;
 
 use crate::{DatumChar, DatumCharClass, DatumDecoder, DatumUTF8Decoder};
-use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -40,10 +39,8 @@ fn do_roundtrip_test(input: &str, output: &str) {
         }),
         true,
     );
-    dtres.expect(&format!(
-        "problem at line {}, dump {:?}",
-        line_number, tokenization
-    ));
+    dtres.unwrap_or_else(|_| panic!("problem at line {}, dump {:?}",
+        line_number, tokenization));
     // so, fun fact, in all the refactors, a bug snuck in where starting any list would enable the parse error flag
     let mut out_str = String::new();
     let mut writer = DatumWriter::default();
@@ -204,7 +201,7 @@ fn decoder_should_fail(input: &str) {
     let mut decoder = DatumDecoder::default();
     for v in input.chars() {
         let res = decoder.feed(0, Some(v), &mut |_, _| Ok(()));
-        if let Err(_) = res {
+        if res.is_err() {
             return;
         }
     }
@@ -247,8 +244,8 @@ fn decoder_results_test() {
         .feed(0, Some('F'), &mut |_, _| panic!("NO"))
         .unwrap();
     let out = [
-        DatumChar::content('\u{10FFFF}' as char),
-        DatumChar::content('a' as char),
+        DatumChar::content('\u{10FFFF}'),
+        DatumChar::content('a'),
     ];
     let mut tmp = Vec::new();
     decoder
