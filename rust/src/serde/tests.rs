@@ -7,18 +7,22 @@
 
 use std::{collections::HashMap, fmt::Debug};
 
-use serde::{de::Visitor, Deserialize};
+use serde::{de::Visitor, Deserialize, Serialize};
 
 use crate::{
     datum_char_to_token_pipeline, serde::de::{PlainDeserializer, RootDeserializer}, DatumAtom, IntoViaDatumPipe,
 };
 
-#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
+use crate::serde::ser::{RootSerializer, Style};
+
+use super::ser::PlainSerializer;
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
 struct Substruct {
     a: i32
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
 enum VeryDetailedEnum {
     UnitVariant,
     StructVariant {
@@ -30,7 +34,62 @@ enum VeryDetailedEnum {
     TupleVariant(i32, i32)
 }
 
-pub(crate) fn test_deserializes_to<'a, V: Deserialize<'a> + Debug + PartialEq>(
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct MyExampleStruct {
+    test1: String
+}
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct MyExampleUnitStruct;
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct MyExampleTupleStruct(i32, i32);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+enum Doc {
+    NewtypeUnit(()),
+    NewtypeU64(u64),
+    NewtypeOption(Option<()>),
+    NewtypeEnum(VeryDetailedEnum),
+    NewtypeVec(Vec<i32>),
+    NewtypeTuple((i32, i32)),
+    CheckStructIndent(i32, MyExampleStruct, MyExampleTupleStruct),
+    NewtypeTupleStruct(MyExampleTupleStruct),
+    NewtypeStruct(MyExampleStruct),
+    NewtypeMap(HashMap<String, String>)
+}
+
+fn test_serializes_to<'a, V: Debug + PartialEq + Serialize + Deserialize<'a>>(text: &str, v: &V) {
+    let mut out = String::new();
+    v.serialize(&mut PlainSerializer::new(&mut out, Style::SpacingOnly)).unwrap();
+    assert_eq!(&out, text);
+    // verify no panics/etc.
+    let mut delme = String::new();
+    v.serialize(&mut PlainSerializer::new(&mut delme, Style::Indented)).unwrap();
+    // check these deserialize properly
+    test_deserializes_to(&out, v);
+    test_deserializes_to(&delme, v);
+}
+fn test_root_serializes_to<'a, V: Debug + PartialEq + Serialize + Deserialize<'a>>(text: &str, v: &V) {
+    let mut out = String::new();
+    v.serialize(&mut RootSerializer(PlainSerializer::new(&mut out, Style::SpacingOnly))).unwrap();
+    assert_eq!(&out, text);
+    // verify no panics/etc.
+    let mut delme = String::new();
+    v.serialize(&mut RootSerializer(PlainSerializer::new(&mut delme, Style::Indented))).unwrap();
+    // check these deserialize properly
+    test_root_deserializes_to(&out, v);
+    test_root_deserializes_to(&delme, v);
+}
+fn test_nt_serializes_to<'a, V: Debug + PartialEq + Serialize + Deserialize<'a>>(text: &str, v: &V) {
+    test_serializes_to(&format!("({})", text), v);
+    test_root_serializes_to(text, v);
+}
+fn test_root_serializes_to_indented<V: Serialize>(text: &str, v: V) {
+    let mut out = String::new();
+    v.serialize(&mut RootSerializer(PlainSerializer::new(&mut out, Style::Indented))).unwrap();
+    assert_eq!(&out, text);
+}
+
+fn test_deserializes_to<'a, V: Deserialize<'a> + Debug + PartialEq>(
     source: &str,
     v: &V,
 ) {
@@ -42,7 +101,7 @@ pub(crate) fn test_deserializes_to<'a, V: Deserialize<'a> + Debug + PartialEq>(
     assert_eq!(v, &v2);
 }
 
-pub(crate) fn test_root_deserializes_to<'a, V: Deserialize<'a> + Debug + PartialEq>(
+fn test_root_deserializes_to<'a, V: Deserialize<'a> + Debug + PartialEq>(
     source: &str,
     v: &V,
 ) {
@@ -90,48 +149,6 @@ impl<'de> Deserialize<'de> for MyExampleNewtypeStructHonest {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct MyExampleStruct;
-
-impl<'de> Visitor<'de> for MyExampleStruct {
-    type Value = MyExampleStruct;
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("example text")
-    }
-    fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-        let k: String = map.next_key().unwrap().unwrap();
-        assert_eq!(k, "test1");
-        let v: String = map.next_value().unwrap();
-        assert_eq!(v, "test1val");
-        let kopt: Option<String> = map.next_key().unwrap();
-        assert_eq!(kopt, None);
-        Ok(MyExampleStruct)
-    }
-}
-impl<'de> Deserialize<'de> for MyExampleStruct {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_struct("MyExampleStruct", &["test1"], MyExampleStruct)
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-struct MyExampleUnitStruct;
-
-impl<'de> Visitor<'de> for MyExampleUnitStruct {
-    type Value = MyExampleUnitStruct;
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("example text")
-    }
-    fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
-        Ok(MyExampleUnitStruct)
-    }
-}
-impl<'de> Deserialize<'de> for MyExampleUnitStruct {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_unit_struct("MyExampleUnitStruct", MyExampleUnitStruct)
-    }
-}
-
 #[test]
 fn test_deserializing() {
     test_atom_deserializes_to(DatumAtom::String("Hello!"), "Hello!".to_string());
@@ -157,7 +174,7 @@ fn test_deserializing() {
     example_map.insert("edgar".to_string(), "computer".to_string());
     example_map.insert("marker".to_string(), "cones".to_string());
     test_deserializes_to("(edgar computer marker cones)", &example_map.clone());
-    test_deserializes_to("(test1 test1val)", &MyExampleStruct);
+    test_deserializes_to("(test1 test1val)", &MyExampleStruct { test1: "test1val".to_string() });
     test_deserializes_to("()", &MyExampleUnitStruct);
     test_deserializes_to("UnitVariant", &VeryDetailedEnum::UnitVariant);
     test_deserializes_to("(UnitVariant)", &VeryDetailedEnum::UnitVariant);
@@ -195,4 +212,45 @@ fn test_deserializing() {
     test_deserialization_fails("(#t #t #t)", (true, true));
     // This should trigger the hold-and-any path; moreover it should not panic
     test_deserialization_fails("\"\"", 0 as u64);
+}
+
+#[test]
+fn test_serializing() {
+    // primitives
+    test_serializes_to("(0 0 0 0 0 0 0 0)", &(0 as u8, 0 as u16, 0 as u32, 0 as u64, 0 as i8, 0 as i16, 0 as i32, 0 as i64));
+    test_serializes_to("(0.0 0.0)", &(0.0f64, 0.0f32));
+    test_serializes_to("\"9\"", &'9');
+    // continue...
+    test_serializes_to("(#t #t #f)", &vec![true, true, false]);
+    let mut example_map: HashMap<String, String> = HashMap::new();
+    example_map.insert("marker".to_string(), "cones".to_string());
+    // ordering can be weird b/c hashmap, so
+    test_serializes_to("(\"marker\" \"cones\")", &example_map.clone());
+    test_serializes_to("(test1 \"test1val\")", &MyExampleStruct {
+        test1: "test1val".to_string()
+    });
+    test_serializes_to("()", &MyExampleUnitStruct);
+    test_serializes_to("(1 2 3)", &(1, 2, 3));
+    test_serializes_to("UnitVariant", &VeryDetailedEnum::UnitVariant);
+    test_serializes_to("(NewtypeVariant 0)", &VeryDetailedEnum::NewtypeVariant(0));
+    test_serializes_to("(TupleVariant 0 1)", &VeryDetailedEnum::TupleVariant(0, 1));
+    test_serializes_to("(StructVariant a 2)", &VeryDetailedEnum::StructVariant { a: 2 });
+
+    test_nt_serializes_to("NewtypeUnit ()", &Doc::NewtypeUnit(()));
+    test_nt_serializes_to("NewtypeU64 -1", &Doc::NewtypeU64(0xFFFFFFFFFFFFFFFF));
+    // None at root level is invalid
+    test_serializes_to("(NewtypeOption #nil)", &Doc::NewtypeOption(None));
+    test_nt_serializes_to("NewtypeOption ()", &Doc::NewtypeOption(Some(())));
+    test_nt_serializes_to("NewtypeEnum UnitVariant", &Doc::NewtypeEnum(VeryDetailedEnum::UnitVariant));
+    test_nt_serializes_to("NewtypeEnum StructVariant a 0", &Doc::NewtypeEnum(VeryDetailedEnum::StructVariant { a: 0 }));
+    test_nt_serializes_to("NewtypeEnum NewtypeVariant 0", &Doc::NewtypeEnum(VeryDetailedEnum::NewtypeVariant(0)));
+    test_nt_serializes_to("NewtypeEnum TupleVariant 0 0", &Doc::NewtypeEnum(VeryDetailedEnum::TupleVariant(0, 0)));
+    test_nt_serializes_to("NewtypeVec 1 2 3", &Doc::NewtypeVec(vec![1, 2, 3]));
+    test_nt_serializes_to("NewtypeTuple 1 2", &Doc::NewtypeTuple((1, 2)));
+    test_nt_serializes_to("NewtypeTupleStruct 1 2", &Doc::NewtypeTupleStruct(MyExampleTupleStruct(1, 2)));
+    test_nt_serializes_to("NewtypeStruct test1 \"\"", &Doc::NewtypeStruct(MyExampleStruct { test1: "".to_string() }));
+    test_nt_serializes_to("NewtypeMap \"marker\" \"cones\"", &Doc::NewtypeMap(example_map.clone()));
+
+    test_root_serializes_to("1 2 3", &(1, 2, 3));
+    test_root_serializes_to_indented("CheckStructIndent\n0\n(\n\ttest1 \"\"\n)\n(3 4)\n", Doc::CheckStructIndent(0, MyExampleStruct { test1: "".to_string() }, MyExampleTupleStruct(3, 4)));
 }
