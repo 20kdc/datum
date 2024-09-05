@@ -8,7 +8,7 @@
 use std::ops::Deref;
 
 use serde::{
-    de::{MapAccess, SeqAccess},
+    de::{EnumAccess, MapAccess, SeqAccess, VariantAccess},
     forward_to_deserialize_any, Deserializer,
 };
 
@@ -16,64 +16,110 @@ use crate::serde::error;
 
 use crate::serde::de::PlainDeserializer;
 
-/// Sequence-root deserializer.
-/// This treats the file as being a sequence of values, and then whatever comes up in the file is treated as elements of that sequence.
-/// In practice, this and [MapRootDeserializer] are the two 'canonical' Datum document forms.
+/// 'Document Root' deserializer.
+///
+/// This is intended to deserialize an entire document at once, assuming the document is a sequence or map.
 ///
 /// _Added in 1.1.0._
-pub struct SeqRootDeserializer<'iterator, B: Default + Deref<Target = str>>(
+pub struct RootDeserializer<'iterator, B: Default + Deref<Target = str>>(
     pub PlainDeserializer<'iterator, B>,
 );
 
+impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
+    for &'a mut RootDeserializer<'_, B>
+{
+    type Error = error::Error;
+    fn deserialize_any<V: serde::de::Visitor<'de>>(self, visitor: V) -> error::Result<V::Value> {
+        self.0.deserialize_any(visitor)
+    }
+    fn deserialize_newtype_struct<V: serde::de::Visitor<'de>>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        visitor.visit_newtype_struct(self)
+    }
+    fn deserialize_option<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        if self.0.has_next_token()? {
+            visitor.visit_some(self)
+        } else {
+            visitor.visit_none()
+        }
+    }
+    fn deserialize_seq<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        visitor.visit_seq(AccessWrapper(self))
+    }
+    fn deserialize_tuple<V: serde::de::Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error> {
+        visitor.visit_seq(AccessWrapper(self))
+    }
+    fn deserialize_tuple_struct<V: serde::de::Visitor<'de>>(
+        self,
+        _name: &'static str,
+        _len: usize,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        visitor.visit_seq(AccessWrapper(self))
+    }
+    fn deserialize_map<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        visitor.visit_map(AccessWrapper(self))
+    }
+    fn deserialize_struct<V: serde::de::Visitor<'de>>(
+        self,
+        _name: &'static str,
+        _fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        visitor.visit_map(AccessWrapper(self))
+    }
+    fn deserialize_enum<V: serde::de::Visitor<'de>>(
+        self,
+        _name: &'static str,
+        _variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        visitor.visit_enum(AccessWrapper(self))
+    }
+    forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string identifier
+        bytes byte_buf unit
+        unit_struct ignored_any
+    }
+    fn is_human_readable(&self) -> bool {
+        true
+    }
+}
+
+/// Hides access traits and also solves some weird lifetime problems.
+struct AccessWrapper<'a, 'iterator, B: Default + Deref<Target = str>>(
+    &'a mut RootDeserializer<'iterator, B>,
+);
+
 impl<'de, 'a, B: Default + Deref<Target = str>> SeqAccess<'de>
-    for &'a mut SeqRootDeserializer<'_, B>
+    for AccessWrapper<'a, '_, B>
 {
     type Error = error::Error;
     fn next_element_seed<T: serde::de::DeserializeSeed<'de>>(
         &mut self,
         seed: T,
     ) -> error::Result<Option<T::Value>> {
-        if self.0.has_next_token()? {
-            seed.deserialize(&mut self.0).map(Some)
+        if self.0.0.has_next_token()? {
+            seed.deserialize(&mut self.0.0).map(Some)
         } else {
             Ok(None)
         }
     }
 }
 
-impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
-    for &'a mut SeqRootDeserializer<'_, B>
-{
-    type Error = error::Error;
-    fn deserialize_any<V: serde::de::Visitor<'de>>(self, visitor: V) -> error::Result<V::Value> {
-        visitor.visit_seq(self)
-    }
-    forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string identifier
-        bytes byte_buf unit seq tuple tuple_struct option newtype_struct map struct enum
-        unit_struct ignored_any
-    }
-}
-
-/// Map-root deserializer.
-/// This treats the file as being a sequence of map entry pairs.
-/// In practice, this and [SeqRootDeserializer] are the two 'canonical' Datum document forms.
-///
-/// _Added in 1.1.0._
-pub struct MapRootDeserializer<'iterator, B: Default + Deref<Target = str>>(
-    pub PlainDeserializer<'iterator, B>,
-);
-
 impl<'de, 'a, B: Default + Deref<Target = str>> MapAccess<'de>
-    for &'a mut MapRootDeserializer<'_, B>
+    for AccessWrapper<'a, '_, B>
 {
     type Error = error::Error;
     fn next_key_seed<T: serde::de::DeserializeSeed<'de>>(
         &mut self,
         seed: T,
     ) -> error::Result<Option<T::Value>> {
-        if self.0.has_next_token()? {
-            seed.deserialize(&mut self.0).map(Some)
+        if self.0.0.has_next_token()? {
+            seed.deserialize(&mut self.0.0).map(Some)
         } else {
             Ok(None)
         }
@@ -82,20 +128,46 @@ impl<'de, 'a, B: Default + Deref<Target = str>> MapAccess<'de>
         &mut self,
         seed: V,
     ) -> error::Result<V::Value> {
-        seed.deserialize(&mut self.0)
+        seed.deserialize(&mut self.0.0)
     }
 }
 
-impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
-    for &'a mut MapRootDeserializer<'_, B>
+impl<'de, 'a, B: Default + Deref<Target = str>> EnumAccess<'de>
+    for AccessWrapper<'a, '_, B>
 {
     type Error = error::Error;
-    fn deserialize_any<V: serde::de::Visitor<'de>>(self, visitor: V) -> error::Result<V::Value> {
-        visitor.visit_map(self)
+    type Variant = Self;
+    fn variant_seed<V: serde::de::DeserializeSeed<'de>>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error> {
+        Ok((seed.deserialize(&mut self.0.0)?, self))
     }
-    forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string identifier
-        bytes byte_buf unit seq tuple tuple_struct option newtype_struct map struct enum
-        unit_struct ignored_any
+}
+
+impl<'de, 'a, B: Default + Deref<Target = str>> VariantAccess<'de>
+    for AccessWrapper<'a, '_, B>
+{
+    type Error = error::Error;
+    fn unit_variant(self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn newtype_variant_seed<T: serde::de::DeserializeSeed<'de>>(
+        self,
+        seed: T,
+    ) -> Result<T::Value, Self::Error> {
+        // Critically important that this is at root level.
+        seed.deserialize(&mut *self.0)
+    }
+    fn tuple_variant<V: serde::de::Visitor<'de>>(
+        self,
+        _len: usize,
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        visitor.visit_seq(self)
+    }
+    fn struct_variant<V: serde::de::Visitor<'de>>(
+        self,
+        _fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Self::Error> {
+        visitor.visit_map(self)
     }
 }

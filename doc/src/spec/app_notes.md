@@ -80,15 +80,22 @@ The Serde mapping defines how Datum interacts with the [serde](https://serde.rs/
 
 In practice, I expect this to allow quick and immediate use of Datum for configuration files.
 
+**This is still in flux until the implementation stabilizes.**
+
+In particular, it'd be nice if newtypes always acted as they do in `RootDeserializer` (saving redundant `()`), but the implementation needs to be worked out before this can be written down here.
+
 ### Deserialization
 
-#### Root Deserializers
+#### Deserializers
 
-There are three root deserializers. One is the 'standard' deserializer, and the other two affect the mapping significantly.
+There are two deserializers.
 
-* The 'plain' format is an as-is 1:1 Serde deserializer, where repeated calls deserialize further values in the file. EOF detection requires calling a custom function to read ahead to determine if EOF has been reached.
-* The 'seq' format implements `deserialize_any` via `visitor.visit_seq`, forwards all other methods to that, and has a `SeqAccess` which continues returning values until EOF is detected (which is considered the end of the sequence). It is intended for the List document format.
-* The 'map' format implements `deserialize_any` via `visitor.visit_map`, forwards all other methods to that, and has a `MapAccess` which is implemented more or less the same as the 'seq' format. It is intended for the Map document format.
+* `PlainDeserializer`: Standard deserializer.
+* `RootDeserializer`: Intended for 'the whole document' values. Removes `()` from a lot of elements.
+
+The 'plain' format is an as-is 1:1 Serde deserializer, where repeated calls deserialize further values in the file. EOF detection requires calling a custom function to read ahead to determine if EOF has been reached.
+
+The root format will be described later.
 
 #### 'Any'
 
@@ -142,6 +149,31 @@ If a list start is not found, then the value is parsed as per `any`.
 
 `newtype_struct` is simply visited without anything actually parsed by the handler.
 
+#### 'Root' Deserializer
+
+The 'root' deserializer wraps the 'plain' deserializer, and works as follows:
+
+* `deserialize_any` is simply passed to the underlying `PlainDeserializer`.
+	* This extends the problems `deserialize_any` has with maps and enums to sequences as well. This is expected.
+* `deserialize_newtype_struct` has the contents run through `RootDeserializer` (same implementation idea as `PlainDeserializer` but it's important we stay in the root format for this case).
+* `deserialize_option` checks for EOF. If EOF is found, it takes the `visit_none` branch. Otherwise, it always takes the `visit_some` branch due to ambiguity (`(#nil b)` is rendered as `#nil b` here) and reruns through `RootDeserializer`.
+	* This is most likely to find its use in the "tree bark" file versioning pattern, where a file is built up of layers of additional data for each version of the format. Datum's not really expected to be used this way, but if someone _does_ do this, it's supported.
+* `deserialize_enum` uses a special 'unwrapped' (`()`-less) version of the `(variant ...)` format.
+* Anything that `PlainDeserializer` would attempt to deserialize as a map assumes an 'unwrapped' map, like with enums.
+* `deserialize_seq`, `deserialize_tuple`, and `deserialize_tuple_struct` all assume an 'unwrapped' seq.
+* Values _inside_ a root-level collection, i.e. keys/values of maps, values in seqs, etcetc. are parsed by `PlainDeserializer`. Options are not collections.
+	* Enum variants and the individual values in an enum variant are considered 'inside a collection'.
+		* An exception to this is specifically newtype variants. Their value (but not their identifying key) remains at root level.
+	* In regards to tuples, Serde performs an 'early exit' of a seq once all elements of the tuple are deserialized. It is expected behaviour that a value can follow the tuple.
+	* `#nil` as `Option<Vec<Option<bool>>>` becomes `Some(vec![None])`.
+	* `1 2` as `(i32, i32)` becomes `(1, 2)`.
+	* `1 (2 3)` as `(i32, (i32, i32))` becomes `(1, (2, 3))`.
+	* `1 2 3 4` as `(i32, i32)` followed by `(i32, i32)` becomes `(1, 2)` followed by `(3, 4)`.
+
+To interpret what 'unwrapped' means here, assume any relevant check for list start (specifically: Enum, Map, lists) automatically succeeds, and EOF is the list end token.
+
+This deserializer is intended for circumstances where the user wishes to serialize/deserialize an entire document rather than a stream of values.
+
 ### Serialization
 
 Serialization has been handled with reference to the Serde implementations of `Deserialize`, to ensure that they deserialize cleanly.
@@ -162,7 +194,9 @@ For `RootSerializer`, the rules change somewhat:
 
 * The bool/i/u/f types, along with strings, units, and unit structs, are forwarded as-is to `PlainSerializer`.
 * `None` is not supported because in this form, `None` and `Some(vec![])` are ambiguous. `Some` is supported by simply serializing whatever's inside.
+	* _As long as the value is at the end of the file,_ the user can 'write' `None` by simply not writing anything.
 * Enums are always forwarded with essentially an "unwrapped `()` form", i.e. `(variant value)` becomes `variant value`.
+	* _Newtype variants in particular_ have their value written as a root-level element. Tuple variants and struct variants are treated like tuples and structs respectively.
 * Structs, maps, sequences, tuples, and tuple structs all become their "unwrapped `()` forms".
 * A key difference in formatting is that `PlainSerializer` attempts to indent seqs, maps, and structs (and struct variants), but not tuples (or tuple variants, or newtype variants, etc.). `RootSerializer` _always_ adds newlines between each root-level element.
 * Sequence/tuple elements, struct/map keys/values, etc. are passed to `PlainSerializer`; the rule of thumb is that `RootSerializer` removes the outermost `()` pair from a value.

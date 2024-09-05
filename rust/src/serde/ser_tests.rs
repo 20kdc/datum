@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::serde::ser::Style;
+use crate::serde::ser::{RootSerializer, Style};
 
 use super::ser::PlainSerializer;
 
@@ -30,9 +30,19 @@ struct MyExampleStruct {
 #[derive(Serialize)]
 struct MyExampleUnitStruct;
 
+#[derive(Serialize)]
+enum MyExampleEnumDocument {
+    NewtypeVec(Vec<i32>)
+}
+
 fn test_serializes_to<V: Serialize>(text: &str, v: V) {
     let mut out = String::new();
     v.serialize(&mut PlainSerializer::new(&mut out, Style::SpacingOnly)).unwrap();
+    assert_eq!(&out, text);
+}
+fn test_root_serializes_to<V: Serialize>(text: &str, v: V) {
+    let mut out = String::new();
+    v.serialize(&mut RootSerializer(PlainSerializer::new(&mut out, Style::SpacingOnly))).unwrap();
     assert_eq!(&out, text);
 }
 
@@ -51,4 +61,5 @@ fn test_serializing() {
     test_serializes_to("(NewtypeVariant 0)", VeryDetailedEnum::NewtypeVariant(0));
     test_serializes_to("(TupleVariant 0 1)", VeryDetailedEnum::TupleVariant(0, 1));
     test_serializes_to("(StructVariant a 2)", VeryDetailedEnum::StructVariant { a: 2 });
+    test_root_serializes_to("NewtypeVec 1 2 3", MyExampleEnumDocument::NewtypeVec(vec![1, 2, 3]));
 }

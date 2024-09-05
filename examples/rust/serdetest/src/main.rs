@@ -60,7 +60,7 @@ fn main() {
     let pipeline: DatumCharToTokenPipeline<String> = DatumCharToTokenPipeline::default();
     let line_number = Cell::new(1);
     let mut iterator = contents.chars().via_datum_pipe(DatumLineNumberTracker::new(&line_number).compose(pipeline));
-    let mut tmp = datum::serde::de::MapRootDeserializer(datum::serde::de::PlainDeserializer::from_iterator(&mut iterator));
+    let mut tmp = datum::serde::de::RootDeserializer(datum::serde::de::PlainDeserializer::from_iterator(&mut iterator));
     let des = MyExampleDocument::deserialize(&mut tmp);
     if let Err(err) = des {
         println!("At line {}: {:?}", line_number.get(), err);

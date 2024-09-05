@@ -19,7 +19,7 @@ use crate::serde::error;
 use super::PlainSerializer;
 
 /// [RootSerializer] serializes a document as a root-level sequence or map.
-/// This matches [crate::serde::de::SeqRootDeserializer] and [crate::serde::de::MapRootDeserializer].
+/// This is intended to match [crate::serde::de::RootDeserializer].
 ///
 /// _Added in 1.1.0._
 pub struct RootSerializer<'write>(pub PlainSerializer<'write>);
