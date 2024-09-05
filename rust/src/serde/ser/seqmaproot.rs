@@ -24,13 +24,11 @@ use super::PlainSerializer;
 /// _Added in 1.1.0._
 pub struct RootSerializer<'write>(pub PlainSerializer<'write>);
 
-macro_rules! type_forward {
-    ($fn_name: ident, $type: ty) => {
-        fn $fn_name(self, v: $type) -> error::Result<()> {
-            self.0.$fn_name(v)?;
-            self.0.fmt_seq_newline()
-        }
-    };
+impl RootSerializer<'_> {
+    fn write_atom(&mut self, atom: DatumAtom<&str>) -> error::Result<()> {
+        self.0.write_atom(atom)?;
+        self.0.fmt_seq_newline()
+    }
 }
 
 impl<'a> Serializer for &'a mut RootSerializer<'_> {
@@ -38,42 +36,18 @@ impl<'a> Serializer for &'a mut RootSerializer<'_> {
     type Error = error::Error;
     type SerializeSeq = Self;
     type SerializeTuple = Self;
-    type SerializeTupleStruct = Self;
     type SerializeTupleVariant = Self;
     type SerializeMap = Self;
     type SerializeStruct = Self;
     type SerializeStructVariant = Self;
 
     // -- Trivial --
-    type_forward!(serialize_bool, bool);
-    type_forward!(serialize_i8, i8);
-    type_forward!(serialize_i16, i16);
-    type_forward!(serialize_i32, i32);
-    type_forward!(serialize_i64, i64);
-    type_forward!(serialize_u8, u8);
-    type_forward!(serialize_u16, u16);
-    type_forward!(serialize_u32, u32);
-    type_forward!(serialize_u64, u64);
-    type_forward!(serialize_f32, f32);
-    type_forward!(serialize_f64, f64);
-    type_forward!(serialize_char, char);
-    type_forward!(serialize_str, &str);
-    type_forward!(serialize_bytes, &[u8]);
-    type_forward!(serialize_unit_struct, &'static str);
     fn collect_str<T: core::fmt::Display + ?Sized>(
         self,
         value: &T,
     ) -> Result<Self::Ok, Self::Error> {
         self.0.collect_str(value)?;
         self.0.fmt_seq_newline()
-    }
-    // -- Key Aliases --
-    fn serialize_newtype_struct<T: serde::Serialize + ?Sized>(
-        self,
-        _name: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        value.serialize(self)
     }
     // -- Option/Unit --
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
@@ -83,21 +57,7 @@ impl<'a> Serializer for &'a mut RootSerializer<'_> {
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
         Err(error::Error::custom("not a supported type for datum's RootSerializer"))
     }
-    fn serialize_some<T: serde::Serialize + ?Sized>(
-        self,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        value.serialize(self)
-    }
     // -- Enum --
-    fn serialize_unit_variant(
-        self,
-        _name: &'static str,
-        _variant_index: u32,
-        variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
-        self.0.write_atom(DatumAtom::Symbol(variant))
-    }
     fn serialize_newtype_variant<T: serde::Serialize + ?Sized>(
         self,
         _name: &'static str,
@@ -105,8 +65,7 @@ impl<'a> Serializer for &'a mut RootSerializer<'_> {
         variant: &'static str,
         value: &T,
     ) -> Result<Self::Ok, Self::Error> {
-        self.0.write_atom(DatumAtom::Symbol(variant))?;
-        self.0.fmt_seq_newline()?;
+        self.write_atom(DatumAtom::Symbol(variant))?;
         value.serialize(self)
     }
     fn serialize_tuple_variant(
@@ -116,8 +75,7 @@ impl<'a> Serializer for &'a mut RootSerializer<'_> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        self.0.write_atom(DatumAtom::Symbol(variant))?;
-        self.0.fmt_seq_newline()?;
+        self.write_atom(DatumAtom::Symbol(variant))?;
         Ok(self)
     }
     fn serialize_struct_variant(
@@ -127,8 +85,7 @@ impl<'a> Serializer for &'a mut RootSerializer<'_> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        self.0.write_atom(DatumAtom::Symbol(variant))?;
-        self.0.fmt_seq_newline()?;
+        self.write_atom(DatumAtom::Symbol(variant))?;
         Ok(self)
     }
     // -- Struct --
@@ -146,16 +103,10 @@ impl<'a> Serializer for &'a mut RootSerializer<'_> {
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
         Ok(self)
     }
-    fn serialize_tuple_struct(
-        self,
-        _name: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        Ok(self)
-    }
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         Ok(self)
     }
+    serializer_invariants!();
 }
 
 // -- Seqlikes --

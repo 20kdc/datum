@@ -32,12 +32,8 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
     fn deserialize_any<V: serde::de::Visitor<'de>>(self, visitor: V) -> error::Result<V::Value> {
         self.0.deserialize_any(visitor)
     }
-    fn deserialize_newtype_struct<V: serde::de::Visitor<'de>>(
-        self,
-        _name: &'static str,
-        visitor: V,
-    ) -> Result<V::Value, Self::Error> {
-        visitor.visit_newtype_struct(self)
+    fn deserialize_u64<V: serde::de::Visitor<'de>>(self, visitor: V) -> error::Result<V::Value> {
+        self.0.deserialize_u64(visitor)
     }
     fn deserialize_option<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         if self.0.has_next_token()? {
@@ -46,29 +42,16 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
             visitor.visit_none()
         }
     }
+    fn deserialize_unit<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
+        self.0.deserialize_unit(visitor)
+    }
     fn deserialize_seq<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         visitor.visit_seq(AccessWrapper(self))
     }
-    fn deserialize_tuple<V: serde::de::Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value, Self::Error> {
-        visitor.visit_seq(AccessWrapper(self))
-    }
-    fn deserialize_tuple_struct<V: serde::de::Visitor<'de>>(
-        self,
-        _name: &'static str,
-        _len: usize,
-        visitor: V,
-    ) -> Result<V::Value, Self::Error> {
-        visitor.visit_seq(AccessWrapper(self))
+    fn deserialize_tuple<V: serde::de::Visitor<'de>>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error> {
+        visitor.visit_seq(TupleAccess(self, len))
     }
     fn deserialize_map<V: serde::de::Visitor<'de>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        visitor.visit_map(AccessWrapper(self))
-    }
-    fn deserialize_struct<V: serde::de::Visitor<'de>>(
-        self,
-        _name: &'static str,
-        _fields: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Self::Error> {
         visitor.visit_map(AccessWrapper(self))
     }
     fn deserialize_enum<V: serde::de::Visitor<'de>>(
@@ -79,13 +62,32 @@ impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
     ) -> Result<V::Value, Self::Error> {
         visitor.visit_enum(AccessWrapper(self))
     }
-    forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string identifier
-        bytes byte_buf unit
-        unit_struct ignored_any
-    }
+    deserializer_invariants!();
     fn is_human_readable(&self) -> bool {
         true
+    }
+}
+
+/// special case problem solver
+struct TupleAccess<'a, 'iterator, B: Default + Deref<Target = str>>(
+    &'a mut RootDeserializer<'iterator, B>,
+    usize
+);
+
+impl<'de, 'a, B: Default + Deref<Target = str>> SeqAccess<'de>
+    for TupleAccess<'a, '_, B>
+{
+    type Error = error::Error;
+    fn next_element_seed<T: serde::de::DeserializeSeed<'de>>(
+        &mut self,
+        seed: T,
+    ) -> error::Result<Option<T::Value>> {
+        if self.1 > 0 {
+            self.1 -= 1;
+            seed.deserialize(&mut self.0.0).map(Some)
+        } else {
+            Ok(None)
+        }
     }
 }
 

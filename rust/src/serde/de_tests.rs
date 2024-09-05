@@ -10,29 +10,48 @@ use std::{collections::HashMap, fmt::Debug};
 use serde::{de::Visitor, Deserialize};
 
 use crate::{
-    datum_char_to_token_pipeline, serde::de::PlainDeserializer, DatumAtom, IntoViaDatumPipe,
+    datum_char_to_token_pipeline, serde::de::{PlainDeserializer, RootDeserializer}, DatumAtom, IntoViaDatumPipe,
 };
 
-#[derive(Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
+struct Substruct {
+    a: i32
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 enum VeryDetailedEnum {
     UnitVariant,
     StructVariant {
         a: i32
     },
     NewtypeVariant(i32),
+    NewtypeVecVariant(Vec<i32>),
+    NewtypeStructVariant(Substruct),
     TupleVariant(i32, i32)
 }
 
-fn test_deserializes_to<'a, V: Deserialize<'a> + Debug + PartialEq>(
+pub(crate) fn test_deserializes_to<'a, V: Deserialize<'a> + Debug + PartialEq>(
     source: &str,
-    v: V,
+    v: &V,
 ) {
     let mut it = source.chars().via_datum_pipe(datum_char_to_token_pipeline());
     let mut pd = PlainDeserializer::from_iterator(&mut it);
     assert!(pd.has_next_token().unwrap());
     let v2 = V::deserialize(&mut pd).unwrap();
     assert!(!pd.has_next_token().unwrap());
-    assert_eq!(v, v2);
+    assert_eq!(v, &v2);
+}
+
+pub(crate) fn test_root_deserializes_to<'a, V: Deserialize<'a> + Debug + PartialEq>(
+    source: &str,
+    v: &V,
+) {
+    let mut it = source.chars().via_datum_pipe(datum_char_to_token_pipeline());
+    let mut pd = RootDeserializer(PlainDeserializer::from_iterator(&mut it));
+    assert!(pd.0.has_next_token().unwrap());
+    let v2 = V::deserialize(&mut pd).unwrap();
+    assert!(!pd.0.has_next_token().unwrap());
+    assert_eq!(v, &v2);
 }
 
 fn test_atom_deserializes_to<'a, V: Deserialize<'a> + Debug + PartialEq>(
@@ -41,7 +60,7 @@ fn test_atom_deserializes_to<'a, V: Deserialize<'a> + Debug + PartialEq>(
 ) {
     let mut text = String::new();
     atom.write(&mut text).unwrap();
-    test_deserializes_to(&text, v)
+    test_deserializes_to(&text, &v)
 }
 
 fn test_deserialization_fails<'a, V: Deserialize<'a> + Debug + PartialEq>(
@@ -133,18 +152,25 @@ fn test_deserializing() {
     test_atom_deserializes_to(DatumAtom::Nil, ());
     test_atom_deserializes_to(DatumAtom::Nil, None as Option<bool>);
     test_atom_deserializes_to(DatumAtom::Boolean(true), MyExampleNewtypeStructHonest);
-    test_deserializes_to("(#t #t #f)", vec![true, true, false]);
+    test_deserializes_to("(#t #t #f)", &vec![true, true, false]);
     let mut example_map: HashMap<String, String> = HashMap::new();
     example_map.insert("edgar".to_string(), "computer".to_string());
     example_map.insert("marker".to_string(), "cones".to_string());
-    test_deserializes_to("(edgar computer marker cones)", example_map.clone());
-    test_deserializes_to("(test1 test1val)", MyExampleStruct);
-    test_deserializes_to("()", MyExampleUnitStruct);
-    test_deserializes_to("UnitVariant", VeryDetailedEnum::UnitVariant);
-    test_deserializes_to("(UnitVariant)", VeryDetailedEnum::UnitVariant);
-    test_deserializes_to("(NewtypeVariant 0)", VeryDetailedEnum::NewtypeVariant(0));
-    test_deserializes_to("(TupleVariant 0 1)", VeryDetailedEnum::TupleVariant(0, 1));
-    test_deserializes_to("(StructVariant a 2)", VeryDetailedEnum::StructVariant { a: 2 });
+    test_deserializes_to("(edgar computer marker cones)", &example_map.clone());
+    test_deserializes_to("(test1 test1val)", &MyExampleStruct);
+    test_deserializes_to("()", &MyExampleUnitStruct);
+    test_deserializes_to("UnitVariant", &VeryDetailedEnum::UnitVariant);
+    test_deserializes_to("(UnitVariant)", &VeryDetailedEnum::UnitVariant);
+    test_deserializes_to("(NewtypeVariant 0)", &VeryDetailedEnum::NewtypeVariant(0));
+    test_root_deserializes_to("NewtypeVariant 0", &VeryDetailedEnum::NewtypeVariant(0));
+    test_deserializes_to("(NewtypeVecVariant 0 1 2)", &VeryDetailedEnum::NewtypeVecVariant(vec![0, 1, 2]));
+    test_root_deserializes_to("NewtypeVecVariant 0 1 2", &VeryDetailedEnum::NewtypeVecVariant(vec![0, 1, 2]));
+    test_deserializes_to("(NewtypeStructVariant a 0)", &VeryDetailedEnum::NewtypeStructVariant(Substruct { a: 0 }));
+    test_root_deserializes_to("NewtypeStructVariant a 0", &VeryDetailedEnum::NewtypeStructVariant(Substruct { a: 0 }));
+    test_deserializes_to("(TupleVariant 0 1)", &VeryDetailedEnum::TupleVariant(0, 1));
+    test_root_deserializes_to("TupleVariant 0 1", &VeryDetailedEnum::TupleVariant(0, 1));
+    test_deserializes_to("(StructVariant a 2)", &VeryDetailedEnum::StructVariant { a: 2 });
+    test_root_deserializes_to("StructVariant a 2", &VeryDetailedEnum::StructVariant { a: 2 });
 
     // these deserializations are known to be impossible, on purpose
     test_deserialization_fails("", false);
@@ -167,4 +193,6 @@ fn test_deserializing() {
     // * self-describing formats can keep track of that they aren't "supposed to have" ended yet in some way (i.e. a 'is it okay to end now' flag in the Deserializer, controlled by the SeqAccess which has the actual state)
     // * in Postcard-like formats, the schema either matches (in which case this behaviour is fine) or it doesn't (in which case it's "your fault")
     test_deserialization_fails("(#t #t #t)", (true, true));
+    // This should trigger the hold-and-any path; moreover it should not panic
+    test_deserialization_fails("\"\"", 0 as u64);
 }

@@ -6,7 +6,6 @@
  */
 
 use core::fmt::Write;
-use std::ops::Deref;
 
 use serde::de::Error;
 use serde::ser::{
@@ -55,7 +54,7 @@ impl<'write> PlainSerializer<'write> {
             writer: DatumWriter::default(),
         }
     }
-    pub(crate) fn write_token<B: Deref<Target = str>>(&mut self, token: DatumToken<B>) -> error::Result<()> {
+    pub(crate) fn write_token(&mut self, token: DatumToken<&str>) -> error::Result<()> {
         if self.style == Style::Minified {
             let kind = token.token_type();
             if kind == DatumTokenType::ListStart || kind == DatumTokenType::ListEnd {
@@ -73,7 +72,7 @@ impl<'write> PlainSerializer<'write> {
         }
         Ok(())
     }
-    pub(crate) fn write_atom<B: Deref<Target = str>>(&mut self, token: DatumAtom<B>) -> error::Result<()> {
+    pub(crate) fn write_atom(&mut self, token: DatumAtom<&str>) -> error::Result<()> {
         self.writer
             .write_atom(self.target, &token)
             .map_err(|e| error::Error::custom(e))?;
@@ -120,76 +119,15 @@ impl<'a> Serializer for &'a mut PlainSerializer<'_> {
     type Error = error::Error;
     type SerializeSeq = Self;
     type SerializeTuple = Self;
-    type SerializeTupleStruct = Self;
     type SerializeTupleVariant = Self;
     type SerializeMap = Self;
     type SerializeStruct = Self;
     type SerializeStructVariant = Self;
 
-    // -- Trivial --
-    fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        let b: DatumAtom<&str> = DatumAtom::Boolean(v);
-        self.write_atom(b)
-    }
-    fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-        self.serialize_i64(v as i64)
-    }
-    fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
-        self.serialize_i64(v as i64)
-    }
-    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-        self.serialize_i64(v as i64)
-    }
-    fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-        let b: DatumAtom<&str> = DatumAtom::Integer(v);
-        self.write_atom(b)
-    }
-    fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-        self.serialize_u32(v as u32)
-    }
-    fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
-        self.serialize_u32(v as u32)
-    }
-    fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-        let b: DatumAtom<&str> = DatumAtom::Integer(v as i64);
-        self.write_atom(b)
-    }
-    fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        let b: DatumAtom<&str> = DatumAtom::Integer(v as i64);
-        self.write_atom(b)
-    }
-    fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
-        let b: DatumAtom<&str> = DatumAtom::Float(v as f64);
-        self.write_atom(b)
-    }
-    fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        let b: DatumAtom<&str> = DatumAtom::Float(v);
-        self.write_atom(b)
-    }
-    // -- Key Aliases --
-    fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
-        self.collect_str(&v)
-    }
-    fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
-        self.serialize_unit()
-    }
-    fn serialize_newtype_struct<T: serde::Serialize + ?Sized>(
-        self,
-        _name: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        value.serialize(self)
-    }
     // -- Option/Unit --
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
         let b: DatumAtom<&str> = DatumAtom::Nil;
         self.write_atom(b)
-    }
-    fn serialize_some<T: serde::Serialize + ?Sized>(
-        self,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error> {
-        value.serialize(self)
     }
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
         let mut b: DatumToken<&str> = DatumToken::ListStart(0);
@@ -198,14 +136,6 @@ impl<'a> Serializer for &'a mut PlainSerializer<'_> {
         self.write_token(b)
     }
     // -- Enum --
-    fn serialize_unit_variant(
-        self,
-        _name: &'static str,
-        _variant_index: u32,
-        variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
-        self.write_atom(DatumAtom::Symbol(variant))
-    }
     fn serialize_newtype_variant<T: serde::Serialize + ?Sized>(
         self,
         _name: &'static str,
@@ -216,7 +146,7 @@ impl<'a> Serializer for &'a mut PlainSerializer<'_> {
         let mut b: DatumToken<&str> = DatumToken::ListStart(0);
         self.write_token(b)?;
         self.write_atom(DatumAtom::Symbol(variant))?;
-        value.serialize(&mut *self)?;
+        value.serialize(&mut NewtypeVariantSerializer(self))?;
         b = DatumToken::ListEnd(0);
         self.write_token(b)
     }
@@ -268,15 +198,6 @@ impl<'a> Serializer for &'a mut PlainSerializer<'_> {
         self.write_token(b)?;
         Ok(self)
     }
-    fn serialize_tuple_struct(
-        self,
-        _name: &'static str,
-        _len: usize,
-    ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        let b: DatumToken<&str> = DatumToken::ListStart(0);
-        self.write_token(b)?;
-        Ok(self)
-    }
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         let b: DatumToken<&str> = DatumToken::ListStart(0);
         self.write_token(b)?;
@@ -284,10 +205,6 @@ impl<'a> Serializer for &'a mut PlainSerializer<'_> {
         Ok(self)
     }
     // -- String --
-    fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-        let b: DatumAtom<&str> = DatumAtom::String(v);
-        self.write_atom(b)
-    }
     fn collect_str<T: core::fmt::Display + ?Sized>(
         self,
         value: &T,
@@ -303,11 +220,7 @@ impl<'a> Serializer for &'a mut PlainSerializer<'_> {
         }
         Ok(())
     }
-    fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        Err(error::Error::custom(
-            "Byte arrays cannot be serialized at present.",
-        ))
-    }
+    serializer_invariants!();
 }
 
 // -- Seqlikes --
@@ -417,6 +330,211 @@ impl<'a> SerializeStruct for &'a mut PlainSerializer<'_> {
 }
 
 impl<'a> SerializeStructVariant for &'a mut PlainSerializer<'_> {
+    type Ok = ();
+    type Error = error::Error;
+    fn serialize_field<T: serde::Serialize + ?Sized>(
+        &mut self,
+        key: &'static str,
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        SerializeStruct::serialize_field(self, key, value)
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        SerializeStruct::end(self)
+    }
+}
+
+// -- Newtype Variant --
+
+/// NewtypeVariantSerializer writes the value inside a newtype variant.
+struct NewtypeVariantSerializer<'ser, 'write>(&'ser mut PlainSerializer<'write>);
+
+impl NewtypeVariantSerializer<'_, '_> {
+    fn write_atom(&mut self, token: DatumAtom<&str>) -> error::Result<()> {
+        self.0.write_atom(token)
+    }
+}
+
+impl<'a> Serializer for &'a mut NewtypeVariantSerializer<'_, '_> {
+    type Ok = ();
+    type Error = error::Error;
+    type SerializeSeq = Self;
+    type SerializeTuple = Self;
+    type SerializeTupleVariant = Self;
+    type SerializeMap = Self;
+    type SerializeStruct = Self;
+    type SerializeStructVariant = Self;
+
+    // -- Forward --
+    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+        self.0.serialize_none()
+    }
+    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
+        self.0.serialize_unit()
+    }
+    fn collect_str<T: core::fmt::Display + ?Sized>(
+        self,
+        value: &T,
+    ) -> Result<Self::Ok, Self::Error> {
+        self.0.collect_str(value)
+    }
+    // -- Enum --
+    fn serialize_newtype_variant<T: serde::Serialize + ?Sized>(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+        value: &T,
+    ) -> Result<Self::Ok, Self::Error> {
+        self.write_atom(DatumAtom::Symbol(variant))?;
+        // this itself is a newtype variant, so keep the chain going
+        value.serialize(self)
+    }
+    fn serialize_tuple_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeTupleVariant, Self::Error> {
+        self.write_atom(DatumAtom::Symbol(variant))?;
+        Ok(self)
+    }
+    fn serialize_struct_variant(
+        self,
+        _name: &'static str,
+        _variant_index: u32,
+        variant: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeStructVariant, Self::Error> {
+        self.write_atom(DatumAtom::Symbol(variant))?;
+        self.0.fmt_open_block()?;
+        Ok(self)
+    }
+    // -- Struct --
+    fn serialize_struct(
+        self,
+        _name: &'static str,
+        _len: usize,
+    ) -> Result<Self::SerializeStruct, Self::Error> {
+        self.0.fmt_open_block()?;
+        Ok(self)
+    }
+    // -- Seq/Map --
+    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+        self.0.fmt_open_block()?;
+        Ok(self)
+    }
+    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
+        Ok(self)
+    }
+    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+        self.0.fmt_open_block()?;
+        Ok(self)
+    }
+    serializer_invariants!();
+}
+
+// -- Seqlikes --
+
+impl<'a> SerializeSeq for &'a mut NewtypeVariantSerializer<'_, '_> {
+    type Ok = ();
+    type Error = error::Error;
+    fn serialize_element<T: serde::Serialize + ?Sized>(
+        &mut self,
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        value.serialize(&mut **self)?;
+        self.0.fmt_seq_newline()
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        self.0.fmt_close_block()
+    }
+}
+
+// Tuples don't get indentation and per-element newlines.
+
+impl<'a> SerializeTuple for &'a mut NewtypeVariantSerializer<'_, '_> {
+    type Ok = ();
+    type Error = error::Error;
+    fn serialize_element<T: serde::Serialize + ?Sized>(
+        &mut self,
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        value.serialize(&mut **self)
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        Ok(())
+    }
+}
+
+impl<'a> SerializeTupleStruct for &'a mut NewtypeVariantSerializer<'_, '_> {
+    type Ok = ();
+    type Error = error::Error;
+    fn serialize_field<T: serde::Serialize + ?Sized>(
+        &mut self,
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        SerializeTuple::serialize_element(self, value)
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        SerializeTuple::end(self)
+    }
+}
+
+impl<'a> SerializeTupleVariant for &'a mut NewtypeVariantSerializer<'_, '_> {
+    type Ok = ();
+    type Error = error::Error;
+    fn serialize_field<T: serde::Serialize + ?Sized>(
+        &mut self,
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        SerializeTuple::serialize_element(self, value)
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        SerializeTuple::end(self)
+    }
+}
+
+// -- Maplikes --
+
+impl<'a> SerializeMap for &'a mut NewtypeVariantSerializer<'_, '_> {
+    type Ok = ();
+    type Error = error::Error;
+    fn serialize_key<T: serde::Serialize + ?Sized>(&mut self, key: &T) -> Result<(), Self::Error> {
+        key.serialize(&mut **self)
+    }
+    fn serialize_value<T: serde::Serialize + ?Sized>(
+        &mut self,
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        value.serialize(&mut **self)?;
+        self.0.fmt_seq_newline()
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        self.0.fmt_close_block()
+    }
+}
+
+impl<'a> SerializeStruct for &'a mut NewtypeVariantSerializer<'_, '_> {
+    type Ok = ();
+    type Error = error::Error;
+    fn serialize_field<T: serde::Serialize + ?Sized>(
+        &mut self,
+        key: &'static str,
+        value: &T,
+    ) -> Result<(), Self::Error> {
+        let b: DatumAtom<&str> = DatumAtom::Symbol(key);
+        self.0.write_atom(b)?;
+        value.serialize(&mut **self)?;
+        self.0.fmt_seq_newline()
+    }
+    fn end(self) -> Result<Self::Ok, Self::Error> {
+        self.0.fmt_close_block()
+    }
+}
+
+impl<'a> SerializeStructVariant for &'a mut NewtypeVariantSerializer<'_, '_> {
     type Ok = ();
     type Error = error::Error;
     fn serialize_field<T: serde::Serialize + ?Sized>(
