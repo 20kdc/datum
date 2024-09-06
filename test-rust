@@ -2,8 +2,8 @@
 set -e
 cd rust
 # check the expected configs
-# tests are expected to auto-disable if they aren't usable!
-cargo test --no-default-features --no-run
+# this build checks that no_std was properly applied - v1.0.1 appears to have had an incident like that
+cargo build --target armv7a-none-eabi --no-default-features
 cargo test --no-default-features -F detailed_errors --no-run
 cargo test --no-default-features -F alloc --no-run
 cargo test --no-default-features -F _experimental,serde --no-run

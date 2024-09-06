@@ -205,13 +205,13 @@ pub fn datum_write_display_as_string<T: core::fmt::Display + ?Sized>(
 /// Used by [datum_write_display_as_string].
 struct DatumStringContentWriter<'writer>(&'writer mut dyn Write);
 impl<'writer> Write for DatumStringContentWriter<'writer> {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
         for v in s.chars() {
             self.write_char(v)?;
         }
         Ok(())
     }
-    fn write_char(&mut self, c: char) -> std::fmt::Result {
+    fn write_char(&mut self, c: char) -> core::fmt::Result {
         DatumChar::string_content(c).write(self.0)
     }
 }

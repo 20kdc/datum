@@ -7,6 +7,8 @@
 
 //! Tests! Sent into a separate directory so they can be filtered from cloc results.
 
+extern crate std;
+
 use core::hash::Hash;
 use std::convert::TryFrom;
 use std::hash::{DefaultHasher, Hasher};
@@ -39,8 +41,7 @@ fn do_roundtrip_test(input: &str, output: &str) {
         }),
         true,
     );
-    dtres.unwrap_or_else(|_| panic!("problem at line {}, dump {:?}",
-        line_number, tokenization));
+    dtres.unwrap_or_else(|_| panic!("problem at line {}, dump {:?}", line_number, tokenization));
     // so, fun fact, in all the refactors, a bug snuck in where starting any list would enable the parse error flag
     let mut out_str = String::new();
     let mut writer = DatumWriter::default();
@@ -243,10 +244,7 @@ fn decoder_results_test() {
     decoder
         .feed(0, Some('F'), &mut |_, _| panic!("NO"))
         .unwrap();
-    let out = [
-        DatumChar::content('\u{10FFFF}'),
-        DatumChar::content('a'),
-    ];
+    let out = [DatumChar::content('\u{10FFFF}'), DatumChar::content('a')];
     let mut tmp = Vec::new();
     decoder
         .feed_iter_to_vec(&mut tmp, [';', 'a'], true)

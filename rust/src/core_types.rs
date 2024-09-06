@@ -6,7 +6,7 @@
  */
 
 use core::fmt::Display;
-use std::{cell::Cell, marker::PhantomData};
+use core::{cell::Cell, marker::PhantomData};
 
 #[cfg(feature = "alloc")]
 use alloc::collections::VecDeque;

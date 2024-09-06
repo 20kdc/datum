@@ -34,8 +34,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::{Debug, Display};
+use core::hash::Hash;
 use core::{convert::TryFrom, fmt::Write};
-use std::hash::Hash;
 
 use crate::{
     datum_error, DatumAtom, DatumMayContainAtom, DatumOffset, DatumPipe, DatumResult, DatumToken,
@@ -59,7 +59,7 @@ impl Default for DatumValue {
 }
 
 impl Hash for DatumValue {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         match self {
             Self::Atom(atm) => {
                 atm.hash(state);

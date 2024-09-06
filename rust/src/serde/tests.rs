@@ -5,6 +5,8 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
+extern crate std;
+
 use std::{collections::HashMap, fmt::Debug};
 
 use serde::{de::Visitor, Deserialize, Serialize};
