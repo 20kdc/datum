@@ -12,8 +12,8 @@ import java.util.LinkedList;
  * Turns a visitor on its head so that it outputs objects.
  * Created 15th February 2023.
  */
-public abstract class DatumDecodingVisitor extends DatumVisitor {
-    public DatumDecodingVisitor() {
+public abstract class DatumTreeVisitor extends DatumVisitor {
+    public DatumTreeVisitor() {
         
     }
 
@@ -21,40 +21,40 @@ public abstract class DatumDecodingVisitor extends DatumVisitor {
     public abstract void visitTree(Object obj, DatumSrcLoc srcLoc);
 
     @Override
-    public void visitString(String s, DatumSrcLoc srcLoc) {
+    public final void visitString(String s, DatumSrcLoc srcLoc) {
         visitTree(s, srcLoc);
     }
 
     @Override
-    public void visitId(String s, DatumSrcLoc srcLoc) {
+    public final void visitId(String s, DatumSrcLoc srcLoc) {
         visitTree(new DatumSymbol(s), srcLoc);
     }
 
     @Override
-    public void visitBoolean(boolean value, DatumSrcLoc srcLoc) {
+    public final void visitBoolean(boolean value, DatumSrcLoc srcLoc) {
         visitTree(value, srcLoc);
     }
 
     @Override
-    public void visitNull(DatumSrcLoc srcLoc) {
+    public final void visitNull(DatumSrcLoc srcLoc) {
         visitTree(null, srcLoc);
     }
 
     @Override
-    public void visitInt(long value, DatumSrcLoc srcLoc) {
+    public final void visitInt(long value, DatumSrcLoc srcLoc) {
         visitTree(value, srcLoc);
     }
 
     @Override
-    public void visitFloat(double value, DatumSrcLoc srcLoc) {
+    public final void visitFloat(double value, DatumSrcLoc srcLoc) {
         visitTree(value, srcLoc);
     }
 
     @Override
-    public DatumVisitor visitList(DatumSrcLoc srcLoc) {
+    public final DatumVisitor visitList(DatumSrcLoc srcLoc) {
         final LinkedList<Object> buildingList = new LinkedList<>();
-        final DatumDecodingVisitor me = this;
-        return new DatumDecodingVisitor() {
+        final DatumTreeVisitor me = this;
+        return new DatumTreeVisitor() {
             @Override
             public void visitTree(Object obj, DatumSrcLoc srcLoc) {
                 buildingList.add(obj);

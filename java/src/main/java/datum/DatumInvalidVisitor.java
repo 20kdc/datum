@@ -10,7 +10,7 @@ package datum;
  * Throws invalid errors on any kind of visit by default.
  * Created February 18th, 2023.
  */
-public class DatumInvalidVisitor extends DatumEncodingVisitor {
+public class DatumInvalidVisitor extends DatumStreamingVisitor {
     public static final DatumInvalidVisitor INSTANCE = new DatumInvalidVisitor();
 
     public DatumInvalidVisitor() {
@@ -18,37 +18,37 @@ public class DatumInvalidVisitor extends DatumEncodingVisitor {
 
     @Override
     public void visitString(String s, DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect string " + s + " here");
+        throw new DatumPositionedException(loc, "Did not expect string " + s + " here");
     }
 
     @Override
     public void visitId(String s, DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect ID " + s + " here");
+        throw new DatumPositionedException(loc, "Did not expect ID " + s + " here");
     }
 
     @Override
     public void visitBoolean(boolean value, DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect boolean " + value + " here");
+        throw new DatumPositionedException(loc, "Did not expect boolean " + value + " here");
     }
 
     @Override
     public void visitNull(DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect null here");
+        throw new DatumPositionedException(loc, "Did not expect null here");
     }
 
     @Override
     public void visitInt(long value, DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect int " + value + " here");
+        throw new DatumPositionedException(loc, "Did not expect int " + value + " here");
     }
 
     @Override
     public void visitFloat(double value, DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect float " + value + " here");
+        throw new DatumPositionedException(loc, "Did not expect float " + value + " here");
     }
 
     @Override
     public DatumVisitor visitList(DatumSrcLoc loc) {
-        throw new RuntimeException("Did not expect list here");
+        throw new DatumPositionedException(loc, "Did not expect list here");
     }
 
     @Override

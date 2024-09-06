@@ -13,14 +13,14 @@ import java.util.List;
  * Encodes from tree to the various visit submethods.
  * Created 16th February 2023.
  */
-public abstract class DatumEncodingVisitor extends DatumVisitor {
-    public DatumEncodingVisitor() {
+public abstract class DatumStreamingVisitor extends DatumVisitor {
+    public DatumStreamingVisitor() {
         
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public void visitTree(Object obj, DatumSrcLoc loc) {
+    public final void visitTree(Object obj, DatumSrcLoc loc) {
         if (obj == null) {
             visitNull(loc);
         } else if (obj instanceof String) {
@@ -41,7 +41,7 @@ public abstract class DatumEncodingVisitor extends DatumVisitor {
             } else if (obj instanceof Float) {
                 visitFloat((float) (Float) obj, loc);
             } else {
-                throw new RuntimeException("Cannot handle visiting number " + obj);
+                throw new DatumPositionedException(loc, "Cannot handle visiting number " + obj);
             }
         } else if (obj instanceof Boolean) {
             visitBoolean((Boolean) obj, loc);
@@ -57,7 +57,7 @@ public abstract class DatumEncodingVisitor extends DatumVisitor {
                 sub.visitTree(Array.get(obj, i), loc);
             sub.visitEnd(loc);
         } else {
-            throw new RuntimeException("Cannot handle visiting datum " + obj);
+            throw new DatumPositionedException(loc, "Cannot handle visiting datum " + obj);
         }
     }
 }

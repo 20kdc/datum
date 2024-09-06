@@ -36,7 +36,7 @@ public class DatumTreeTest {
         );
         // Test that the tree was visited and that it faithfully reproduces contents
         AtomicBoolean signalWasVisited = new AtomicBoolean();
-        DatumDecodingVisitor visitor = new DatumDecodingVisitor() {
+        DatumTreeVisitor visitor = new DatumTreeVisitor() {
             @Override
             public void visitTree(Object obj, DatumSrcLoc srcLoc) {
                 assertEquals(input, obj);
@@ -47,10 +47,10 @@ public class DatumTreeTest {
             public void visitEnd(DatumSrcLoc srcLoc) {
             }
         };
-        new DatumEncodingProxyVisitor(visitor).visitTree(input, DatumSrcLoc.NONE);
+        new DatumProxyVisitor(visitor).visitTree(input, DatumSrcLoc.NONE);
         assertTrue(signalWasVisited.get());
         // Test conversion of arrays
-        visitor = new DatumDecodingVisitor() {
+        visitor = new DatumTreeVisitor() {
             @Override
             public void visitTree(Object obj, DatumSrcLoc srcLoc) {
                 assertEquals(Arrays.asList("A", "B", "C"), obj);
@@ -62,7 +62,7 @@ public class DatumTreeTest {
             }
         };
         signalWasVisited.set(false);
-        new DatumEncodingProxyVisitor(visitor).visitTree(new String[] {"A", "B", "C"}, DatumSrcLoc.NONE);
+        new DatumProxyVisitor(visitor).visitTree(new String[] {"A", "B", "C"}, DatumSrcLoc.NONE);
         assertTrue(signalWasVisited.get());
     }
 

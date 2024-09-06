@@ -10,3 +10,4 @@
 * [Rust Implementation](./rust/intro.md)
 	* [Core Datatypes](./rust/core_types.md)
 	* [Example: Desk Calculator](./rust/ex_calculator.md)
+* [Java Implementation](./java/intro.md)

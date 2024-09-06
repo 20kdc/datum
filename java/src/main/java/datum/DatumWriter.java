@@ -15,9 +15,9 @@ import java.io.StringWriter;
  * But due to the formatting-varying nature of Datum, will not pretty-print totally automatically.
  * Created 15th February 2023.
  */
-public class DatumWriter extends DatumEncodingVisitor {
-    protected final Appendable base;
-    protected SpacingState queued = SpacingState.None;
+public final class DatumWriter extends DatumStreamingVisitor {
+    public final Appendable base;
+    public State queued = State.None;
 
     /**
      * Current indentation level. Turns into tabs/etc.
@@ -47,13 +47,13 @@ public class DatumWriter extends DatumEncodingVisitor {
     }
 
     protected void emitQueued(boolean listEnd) {
-        if (queued == SpacingState.QueuedIndent) {
+        if (queued == State.QueuedIndent) {
             for (int i = 0; i < indent; i++)
                 putChar('\t');
-        } else if (queued == SpacingState.AfterToken && !listEnd) {
+        } else if (queued == State.AfterToken && !listEnd) {
             putChar(' ');
         }
-        queued = SpacingState.None;
+        queued = State.None;
     }
 
     private void putEscape(char c) {
@@ -69,7 +69,11 @@ public class DatumWriter extends DatumEncodingVisitor {
         } else if (c < 32 || c == 127 || c == 'r' || c == 'n' || c == 't' || c == 'x') {
             putChar('\\');
             putChar('x');
-            for (char c2 : Integer.toHexString((int) c).toCharArray())
+            String hex = Integer.toHexString((int) c);
+            // roundtrip tests assume this
+            if (hex.length() == 1)
+                putChar('0');
+            for (char c2 : hex.toCharArray())
                 putChar(c2);
             putChar(';');
         } else {
@@ -103,7 +107,7 @@ public class DatumWriter extends DatumEncodingVisitor {
      */
     public void visitNewline() {
         putChar('\n');
-        queued = SpacingState.QueuedIndent;
+        queued = State.QueuedIndent;
     }
 
     @Override
@@ -118,7 +122,7 @@ public class DatumWriter extends DatumEncodingVisitor {
             }
         }
         putChar('"');
-        queued = SpacingState.AfterToken;
+        queued = State.AfterToken;
     }
 
     private void putPIDChar(char c) {
@@ -139,6 +143,14 @@ public class DatumWriter extends DatumEncodingVisitor {
             putChar('{');
             putChar('}');
             putChar('#');
+        } else if (s.length() == 1) {
+            char chr = s.charAt(0);
+            DatumCharClass cls = DatumCharClass.identify(chr);
+            if (cls != DatumCharClass.Content && cls != DatumCharClass.Sign) {
+                putEscape(chr);
+            } else {
+                putChar(chr);
+            }
         } else {
             boolean isFirst = true;
             for (char c : s.toCharArray()) {
@@ -154,7 +166,7 @@ public class DatumWriter extends DatumEncodingVisitor {
                 }
             }
         }
-        queued = SpacingState.AfterToken;
+        queued = State.AfterToken;
     }
 
     @Override
@@ -162,7 +174,7 @@ public class DatumWriter extends DatumEncodingVisitor {
         emitQueued(false);
         putChar('#');
         putChar(value ? 't' : 'f');
-        queued = SpacingState.AfterToken;
+        queued = State.AfterToken;
     }
 
     @Override
@@ -172,7 +184,7 @@ public class DatumWriter extends DatumEncodingVisitor {
         putChar('n');
         putChar('i');
         putChar('l');
-        queued = SpacingState.AfterToken;
+        queued = State.AfterToken;
     }
 
     @Override
@@ -180,7 +192,7 @@ public class DatumWriter extends DatumEncodingVisitor {
         emitQueued(false);
         for (char c : Long.toString(value).toCharArray())
             putChar(c);
-        queued = SpacingState.AfterToken;
+        queued = State.AfterToken;
     }
 
     @Override
@@ -208,7 +220,7 @@ public class DatumWriter extends DatumEncodingVisitor {
             for (char c : Double.toString(value).toCharArray())
                 putChar(c);
         }
-        queued = SpacingState.AfterToken;
+        queued = State.AfterToken;
     }
 
     /**
@@ -219,7 +231,7 @@ public class DatumWriter extends DatumEncodingVisitor {
     public DatumWriter visitList(DatumSrcLoc srcLoc) {
         emitQueued(false);
         putChar('(');
-        queued = SpacingState.None;
+        queued = State.None;
         return this;
     }
 
@@ -230,10 +242,10 @@ public class DatumWriter extends DatumEncodingVisitor {
     public void visitEnd(DatumSrcLoc srcLoc) {
         emitQueued(true);
         putChar(')');
-        queued = SpacingState.AfterToken;
+        queued = State.AfterToken;
     }
 
-    protected enum SpacingState {
+    public enum State {
         None,
         QueuedIndent,
         // After a token (that isn't a list start, for "(example)" kinda thing)

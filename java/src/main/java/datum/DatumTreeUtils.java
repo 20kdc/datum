@@ -16,8 +16,31 @@ public final class DatumTreeUtils {
         
     }
 
-    public static DatumDecToLambdaVisitor decVisitor(DatumDecToLambdaVisitor.Handler h) {
-        return new DatumDecToLambdaVisitor(h);
+    public static DatumVisitor decVisitor(VisitorLambda h) {
+        return new LambdaVisitor(h);
+    }
+
+    /**
+     * Simply passes to a lambda.
+     * Mainly useful for syntactic simplicity.
+     * Created 13th March 2023.
+     * Moved into DatumTreeUtils 6th September 2024.
+     */
+    private final static class LambdaVisitor extends DatumTreeVisitor {
+        public final VisitorLambda handler;
+
+        public LambdaVisitor(VisitorLambda h) {
+            this.handler = h;
+        }
+
+        @Override
+        public void visitTree(Object obj, DatumSrcLoc srcLoc) {
+            handler.handle(obj, srcLoc);
+        }
+
+        @Override
+        public void visitEnd(DatumSrcLoc loc) {
+        }
     }
 
     public static DatumSymbol sym(String s) {
@@ -52,5 +75,9 @@ public final class DatumTreeUtils {
     @SuppressWarnings("unchecked")
     public static List<Object> cList(Object o) {
         return (List<Object>) o;
+    }
+
+    public interface VisitorLambda {
+        void handle(Object value, DatumSrcLoc srcLoc);
     }
 }

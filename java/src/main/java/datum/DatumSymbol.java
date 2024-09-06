@@ -8,7 +8,7 @@ package datum;
 
 /**
  * Wrapper around String for symbols in the tree form.
- * Ideally, this would be unwrapped immediately, but a few measures have been taken to ensure things are okay if you don't.
+ * Implements Comparable and hashCode so that it can be put in maps/etc.
  * Created 15th February 2023.
  */
 public final class DatumSymbol implements Comparable<DatumSymbol> {

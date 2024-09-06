@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Test;
 
-import datum.DatumDecodingVisitor;
+import datum.DatumTreeVisitor;
 import datum.DatumReaderTokenSource;
 import datum.DatumRuntimeIOException;
 import datum.DatumSrcLoc;
@@ -118,7 +118,7 @@ public class DatumIOTest {
                 ")";
         DatumReaderTokenSource drs = new DatumReaderTokenSource("string", tcs);
         AtomicBoolean signalWasVisited = new AtomicBoolean();
-        drs.visit(new DatumDecodingVisitor() {
+        drs.visit(new DatumTreeVisitor() {
             @Override
             public void visitEnd(DatumSrcLoc srcLoc) {
             }
@@ -137,7 +137,7 @@ public class DatumIOTest {
         StringWriter sw = new StringWriter();
         DatumWriter dw = new DatumWriter(sw);
         dw.visitTree(input, DatumSrcLoc.NONE);
-        assertEquals("((moku sina) li (pona) (tawa mi) #t #f #{}# \\#escapethis \\1234 #nil 256 256 \"\\x0;\\x10;\" 0.125 \"Hello\\r\\n\\t\u5000\ud800\udc00\" (quote hi))", sw.toString());
+        assertEquals("((moku sina) li (pona) (tawa mi) #t #f #{}# \\#escapethis \\1234 #nil 256 256 \"\\x00;\\x10;\" 0.125 \"Hello\\r\\n\\t\u5000\ud800\udc00\" (quote hi))", sw.toString());
     }
 
 }

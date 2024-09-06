@@ -6,7 +6,7 @@
 
 	<groupId>t20kdc.datum</groupId>
 	<artifactId>datum</artifactId>
-	<version>0.7-SNAPSHOT</version>
+	<version>1.0</version>
 
 	<name>gabien-datum</name>
 	<description>Datum is a human-friendly, machine-readable data exchange format meant for quick implementation in various languages.</description>

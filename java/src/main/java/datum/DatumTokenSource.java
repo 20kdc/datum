@@ -54,7 +54,7 @@ public abstract class DatumTokenSource {
             if (!read()) {
                 if (storedListVisitors.isEmpty())
                     return false;
-                throw new RuntimeException(listStart + ": EOF during list started here");
+                throw new DatumPositionedException(srcLoc(), "EOF during list started here");
             }
             switch (type()) {
             case ID:
@@ -76,7 +76,7 @@ public abstract class DatumTokenSource {
                     try {
                         l = Long.valueOf(c.substring(1), 16);
                     } catch (NumberFormatException nfe2) {
-                        throw new RuntimeException(position() + ": Invalid hex constant: " + c, nfe2);
+                        throw new DatumPositionedException(srcLoc(), "Invalid hex constant: " + c, nfe2);
                     }
                     visitor.visitInt(l, srcLoc());
                 } else if (c.equalsIgnoreCase("i+inf.0")) {
@@ -86,7 +86,7 @@ public abstract class DatumTokenSource {
                 } else if (c.equalsIgnoreCase("i+nan.0")) {
                     visitor.visitFloat(Double.NaN, srcLoc());
                 } else {
-                    throw new RuntimeException(position() + ": Unknown special ID sequence: " + c);
+                    throw new DatumPositionedException(srcLoc(), "Unknown special ID sequence: " + c);
                 }
             }
                 break;
@@ -101,7 +101,7 @@ public abstract class DatumTokenSource {
                 break;
             case ListEnd:
                 if (storedListVisitors.isEmpty())
-                    throw new RuntimeException(position() + ": List end with no list");
+                    throw new DatumPositionedException(srcLoc(), "List end with no list");
                 visitor.visitEnd(srcLoc());
                 visitor = storedListVisitors.pop();
                 listStart = storedListStarts.pop();
@@ -126,7 +126,7 @@ public abstract class DatumTokenSource {
             try {
                 d = Double.valueOf(c);
             } catch (NumberFormatException nfe2) {
-                throw new RuntimeException(position() + ": Invalid number: " + c);
+                throw new DatumPositionedException(srcLoc(), "Invalid number: " + c);
             }
             visitor.visitFloat(d, srcLoc());
             return;

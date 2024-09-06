@@ -11,13 +11,13 @@ package datum;
  * Main uses are: Testing, and visitor state machines (using onVisitedValue).
  * Created on February 16th, 2023.
  */
-public class DatumEncodingProxyVisitor extends DatumEncodingVisitor {
+public class DatumProxyVisitor extends DatumStreamingVisitor {
     /**
      * The target DatumVisitor.
      */
     public DatumVisitor target;
 
-    public DatumEncodingProxyVisitor(DatumVisitor target) {
+    public DatumProxyVisitor(DatumVisitor target) {
         this.target = target;
     }
 
@@ -67,9 +67,9 @@ public class DatumEncodingProxyVisitor extends DatumEncodingVisitor {
 
     @Override
     public DatumVisitor visitList(DatumSrcLoc loc) {
-        final DatumEncodingProxyVisitor me = this;
+        final DatumProxyVisitor me = this;
         // Make a visitor that hooks the target list visitor so that we know when the list ends.
-        return new DatumEncodingProxyVisitor(target.visitList(loc)) {
+        return new DatumProxyVisitor(target.visitList(loc)) {
             @Override
             public void visitEnd(DatumSrcLoc loc) {
                 super.visitEnd(loc);

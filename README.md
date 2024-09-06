@@ -1,14 +1,12 @@
 # Datum: Terse, human-writable data format
 
-**Under construction!** _See TODO._
-
 Datum is a terse, human-writable data format meant for quick implementation in various languages.
 
 It has a specification, available at [./doc/src/spec](./doc/src/spec).
 
 Implementations exist for:
 
-* Java [./java](./java) (*not yet stabilized*)
+* Java [./java](./java)
 * Rust [./rust](./rust)
 
 It was originally developed for use in some of my Java programs for the purpose of fulfilling the role of 'terse data language,' with some key distinctions:
@@ -18,14 +16,6 @@ It was originally developed for use in some of my Java programs for the purpose 
 * Concise implementation.
 
 It's intended to be reasonably readable by R6RS readers, but not a strict subset. (However, it has been used in a Java project to implement a "Javaified" Scheme dialect.)
-
-## TODO
-
-* Does the Java version of the library need to go on a diet?
-    * Java: Way too many kinds of Visitor specific to all the very niche cases that came up in use in GaBIEn.
-* Java impl needs Javadocs
-* Rename Java classes to avoid confusion on meaning of 'decode'
-* Java version's v1.0.0?
 
 ## License
 

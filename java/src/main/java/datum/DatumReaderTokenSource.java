@@ -14,15 +14,15 @@ import java.io.StringReader;
  * DatumTokenStream based on Reader.
  * Created February 16th, 2023.
  */
-public class DatumReaderTokenSource extends DatumTokenSource {
+public final class DatumReaderTokenSource extends DatumTokenSource {
     private Reader reader;
     private String tokenContents;
     private DatumTokenType tokenType;
     private int holdingCell = -1;
     private DatumCharClass lastCharClass;
 
-    public int lineNumber = 1;
-    public int tokenLineNumber = 1;
+    private int lineNumber = 1;
+    private int tokenLineNumber = 1;
 
     public final String fileName;
 
@@ -43,7 +43,7 @@ public class DatumReaderTokenSource extends DatumTokenSource {
         try {
             chr = reader.read();
         } catch (IOException e) {
-            throw new DatumRuntimeIOException(e);
+            throw new DatumPositionedException(srcLoc(), new DatumRuntimeIOException(e));
         }
         if (chr == 10)
             lineNumber++;
@@ -64,16 +64,16 @@ public class DatumReaderTokenSource extends DatumTokenSource {
         lastCharClass = DatumCharClass.identify((char) val);
         if (lastCharClass == DatumCharClass.Meta) {
             if (val != '\\') 
-                throw new RuntimeException(position() + ": Invalid character " + val);
+                throw new DatumPositionedException(srcLoc(), "Invalid character " + val);
         } else {
             return val;
         }
         lastCharClass = DatumCharClass.Content;
         val = readerRead();
         if (val == -1)
-            throw new RuntimeException(position() + ": \\ without escape");
+            throw new DatumPositionedException(srcLoc(), "\\ without escape");
         if (val == '\n')
-            throw new RuntimeException(position() + ": \\ with newline");
+            throw new DatumPositionedException(srcLoc(), "\\ with newline");
         if (val == 'r')
             return '\r';
         if (val == 'n')
@@ -85,14 +85,14 @@ public class DatumReaderTokenSource extends DatumTokenSource {
             while (true) {
                 int dig = readerRead();
                 if (dig == -1)
-                    throw new RuntimeException(position() + ": Interrupted hex escape");
+                    throw new DatumPositionedException(srcLoc(), "Interrupted hex escape");
                 if (dig == ';')
                     break;
                 res <<= 4;
                 try {
                     res |= Integer.parseInt(Character.toString((char) dig), 16);
                 } catch (NumberFormatException nfe) {
-                    throw new RuntimeException(position() + ": Bad hex escape");
+                    throw new DatumPositionedException(srcLoc(), "Bad hex escape");
                 }
             }
             char[] data = Character.toChars(res);
@@ -137,7 +137,7 @@ public class DatumReaderTokenSource extends DatumTokenSource {
             while (true) {
                 int dec = decodeNextChar();
                 if (dec == -1)
-                    throw new RuntimeException(position() + ": interrupted string");
+                    throw new DatumPositionedException(srcLoc(), "interrupted string");
                 if (lastCharClass == DatumCharClass.String)
                     break;
                 decChar = (char) dec;

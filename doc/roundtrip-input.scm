@@ -24,6 +24,6 @@ hello
 #nil
 #{}#
 (quote hello)
-"mi moku telo tan luka sina"
+"mi ken \"awen\" e nimi kepeken ni"
 escape\ me
 "\x7f;\x00;\x10;\r\n\t"
