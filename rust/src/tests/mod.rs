@@ -13,7 +13,10 @@ use core::hash::Hash;
 use std::convert::TryFrom;
 use std::hash::{DefaultHasher, Hasher};
 
-use crate::{DatumChar, DatumCharClass, DatumDecoder, DatumUTF8Decoder};
+use crate::{
+    DatumByteToTokenPipeline, DatumChar, DatumCharClass, DatumDecoder, DatumParser,
+    DatumUTF8Decoder, IntoDatumBufferedPipe, IntoViaDatumBufferedPipe,
+};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -70,11 +73,22 @@ fn do_roundtrip_test(input: &str, output: &str) {
     let hash2 = hasher.finish();
     assert_eq!(out_str, output);
     assert_eq!(hash1, hash2);
-    // --- one final time, with feeling: iterator test ---
+    // --- iterator test ---
     assert_eq!(
         out_str
             .bytes()
             .via_datum_pipe(datum_byte_to_value_pipeline())
+            .map(|v| v.unwrap())
+            .count(),
+        out.len()
+    );
+    // --- iterator test 2 ---
+    let i2pipeline: DatumByteToTokenPipeline<String> = Default::default();
+    let i2pipeline = i2pipeline.compose(DatumParser::default());
+    assert_eq!(
+        out_str
+            .bytes()
+            .via_datum_buffered_pipe(IntoDatumBufferedPipe::into_buf_pipe(i2pipeline))
             .map(|v| v.unwrap())
             .count(),
         out.len()

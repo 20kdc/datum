@@ -6,5 +6,5 @@ publish = false
 
 [dependencies]
 # we need alloc for now for the iterator :(
-datum = { path = "../../../rust", default-features = false, features = ["_experimental", "serde", "alloc", "detailed_errors"] }
+datum = { path = "../../../rust", default-features = false, features = ["_experimental", "serde", "detailed_errors"] }
 serde = { version = "1.0.209", default-features = false, features = ["std", "derive"] }

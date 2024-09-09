@@ -22,12 +22,10 @@ pub use errors::*;
 mod pipe;
 pub use pipe::*;
 
-//mod pipe_buf;
-//pub use pipe_buf::*;
+mod pipe_buf;
+pub use pipe_buf::*;
 
-#[cfg(feature = "alloc")]
 mod pipe_vdp;
-#[cfg(feature = "alloc")]
 pub use pipe_vdp::*;
 
 // Encoding
