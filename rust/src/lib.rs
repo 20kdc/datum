@@ -16,16 +16,14 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-pub mod sealant;
-
 mod errors;
 pub use errors::*;
 
+mod queue;
+pub use queue::*;
+
 mod pipe;
 pub use pipe::*;
-
-mod pipe_buf;
-pub use pipe_buf::*;
 
 mod pipe_vdp;
 pub use pipe_vdp::*;

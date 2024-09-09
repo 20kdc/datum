@@ -5,7 +5,7 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use crate::{DatumOffset, DatumResult};
+use crate::{DatumBoundedQueue, DatumBoundedQueueMul, DatumBoundedQueueOfType, DatumOffset, DatumResult};
 
 /// Generic "input X, get Y" function
 pub trait DatumPipe {
@@ -66,123 +66,6 @@ pub trait DatumPipe {
     }
 }
 
-/// Fixed-size queue-like apparatus, implemented for () and Option(T, Q).
-///
-/// _Added in 1.2.0._
-pub trait DatumBoundedQueue<T>: Sized + Default {
-    /// A queue of +1 length.
-    type Inc: DatumBoundedQueue<T>;
-
-    fn push_back(&mut self, v: T);
-    fn pop_front(&mut self) -> Option<T>;
-}
-
-/// Fixed-size queue-like apparatus: Add
-///
-/// _Added in 1.2.0._
-pub trait DatumBoundedQueueAdd<T, O: DatumBoundedQueue<T>>: DatumBoundedQueue<T> {
-    /// Added together.
-    type Add: DatumBoundedQueue<T>;
-}
-
-/// Fixed-size queue-like apparatus: Mul
-///
-/// _Added in 1.2.0._
-pub trait DatumBoundedQueueMul<T, O: DatumBoundedQueue<T>>: DatumBoundedQueue<T> {
-    /// Added together.
-    type Mul: DatumBoundedQueue<T>;
-}
-
-/// Fixed-size queue-like apparatus: type changer
-///
-/// _Added in 1.2.0._
-pub trait DatumBoundedQueueOfType<T> {
-    /// Adjusted type.
-    type Changed: DatumBoundedQueue<T>;
-}
-
-impl<T> DatumBoundedQueue<T> for () {
-    type Inc = Option<(T, Self)>;
-
-    fn push_back(&mut self, _v: T) {
-        unreachable!()
-    }
-    fn pop_front(&mut self) -> Option<T> {
-        None
-    }
-}
-
-impl<T> DatumBoundedQueueOfType<T> for () {
-    type Changed = ();
-}
-
-impl<T, Q: DatumBoundedQueue<T>> DatumBoundedQueue<T> for Option<(T, Q)> {
-    type Inc = Option<(T, Self)>;
-
-    fn push_back(&mut self, v: T) {
-        if let Some(q) = self {
-            q.1.push_back(v);
-        } else {
-            *self = Some((v, Default::default()));
-        }
-    }
-    fn pop_front(&mut self) -> Option<T> {
-        let tmp = self.take();
-        match tmp {
-            Self::None => None,
-            Self::Some((v, mut q)) => {
-                loop {
-                    match q.pop_front() {
-                        None => break,
-                        Some(v2) => self.push_back(v2),
-                    }
-                }
-                Some(v)
-            }
-        }
-    }
-}
-
-impl<T, Q: DatumBoundedQueueOfType<N>, N> DatumBoundedQueueOfType<N> for Option<(T, Q)> {
-    type Changed = Option<(N, Q::Changed)>;
-}
-
-impl<T, O: DatumBoundedQueue<T>> DatumBoundedQueueAdd<T, O> for () {
-    type Add = O;
-}
-
-impl<T, O: DatumBoundedQueue<T>> DatumBoundedQueueMul<T, O> for () {
-    type Mul = ();
-}
-
-impl<
-        T,
-        Q: DatumBoundedQueue<T> + DatumBoundedQueueAdd<T, OI>,
-        O: DatumBoundedQueue<T, Inc = OI>,
-        OI: DatumBoundedQueue<T>,
-    > DatumBoundedQueueAdd<T, O> for Option<(T, Q)>
-{
-    // Q = Self - 1
-    // OI = O + 1
-    // Add = Q + OI
-    // Therefore Add = Self + O
-    type Add = Q::Add;
-}
-
-impl<
-        T,
-        Q: DatumBoundedQueue<T> + DatumBoundedQueueMul<T, O, Mul = OMQ>,
-        OMQ: DatumBoundedQueue<T>,
-        O: DatumBoundedQueue<T> + DatumBoundedQueueAdd<T, OMQ>,
-    > DatumBoundedQueueMul<T, O> for Option<(T, Q)>
-{
-    // Q = Self - 1
-    // OMQ = O * Q
-    // Add = OMQ + O
-    // Therefore Add = Self * O
-    type Mul = O::Add;
-}
-
 /// Bounded queue of length 1.
 ///
 /// _Added in 1.2.0._
@@ -240,13 +123,17 @@ impl<A: DatumPipe, B: DatumPipe<Input = A::Output>> DatumPipe for DatumComposePi
     }
 }
 
+// In a composed buffer pair, in response to one feed call, A can output len(A).
+// B can output (len(A) + 1) * len(B).
+
 impl<
         A: DatumBoundedPipe<OutputQueue = AQ>,
         B: DatumBoundedPipe<Input = A::Output, OutputQueue = BQ>,
-        AQ: DatumBoundedQueueOfType<(DatumOffset, B::Output)>,
-        BQ: DatumBoundedQueueAdd<(DatumOffset, B::Output), BQ, Add = BQM2>,
-        BQM2: DatumBoundedQueueMul<(DatumOffset, B::Output), AQ::Changed>,
+        AQ: DatumBoundedQueueOfType<(DatumOffset, B::Output), Changed = AQC>,
+        AQC: DatumBoundedQueue<(DatumOffset, B::Output), Inc = AQCI>,
+        AQCI: DatumBoundedQueue<(DatumOffset, B::Output)>,
+        BQ: DatumBoundedQueueMul<(DatumOffset, B::Output), AQCI>
     > DatumBoundedPipe for DatumComposePipe<A, B>
 {
-    type OutputQueue = BQM2::Mul;
+    type OutputQueue = BQ::Mul;
 }

@@ -76,34 +76,42 @@ mod vdp {
 pub use vdp::*;
 
 mod vdbp {
-    use crate::{DatumBufPipe, DatumOffset, DatumResult, IntoDatumBufPipe};
+    use crate::{DatumBoundedPipe, DatumBoundedQueue, DatumOffset, DatumResult};
 
     /// This is used in [IntoViaDatumBufPipe::via_datum_buf_pipe].
     ///
     /// _Added in 1.2.0._
     #[derive(Clone)]
-    pub struct ViaDatumBufPipe<I: Iterator<Item = S>, S, P: DatumBufPipe<Input = S>> {
+    pub struct ViaDatumBufPipe<I: Iterator<Item = S>, S, P: DatumBoundedPipe<Input = S>> {
         offset: DatumOffset,
         iterator: I,
         pipeline: P,
+        buffer: P::OutputQueue,
         eof: bool,
     }
 
-    impl<I: Iterator<Item = S>, S, P: DatumBufPipe<Input = S>> Iterator for ViaDatumBufPipe<I, S, P> {
+    impl<I: Iterator<Item = S>, S, P: DatumBoundedPipe<Input = S>> Iterator for ViaDatumBufPipe<I, S, P> {
         type Item = DatumResult<P::Output>;
 
         fn next(&mut self) -> Option<Self::Item> {
             loop {
-                let res = self.pipeline.buffer_next();
-                if let Some(res) = res.map(|v| v.map(|v| v.1)) {
-                    return Some(res);
+                if let Some(res) = self.buffer.pop_front() {
+                    return Some(Ok(res.1));
                 } else if self.eof {
                     return None;
                 } else {
-                    // ran out of buffer, try iterator
-                    let val = self.iterator.next();
-                    self.eof |= val.is_none();
-                    self.pipeline.buffer_feed(self.offset, val);
+                    let base_res = self.iterator.next();
+                    let buffer = &mut self.buffer;
+                    if base_res.is_none() {
+                        self.eof = true;
+                    }
+                    let res = self.pipeline.feed(self.offset, base_res, &mut |at, v| {
+                        buffer.push_back((at, v));
+                        Ok(())
+                    });
+                    if let Err(err) = res {
+                        return Some(Err(err));
+                    }
                     self.offset += 1;
                 }
             }
@@ -119,21 +127,22 @@ mod vdbp {
         /// When the iterator runs out of elements, an EOF will be signalled.
         /// At that point, the pipe iterator will no longer retrieve elements from the source.
         /// Offsets are internally managed and start at 0.
-        fn via_datum_buf_pipe<P: IntoDatumBufPipe<Input = I>>(
+        fn via_datum_buf_pipe<P: DatumBoundedPipe<Input = I>>(
             self,
             pipe: P,
-        ) -> ViaDatumBufPipe<Self, I, P::IntoBufferedPipe>;
+        ) -> ViaDatumBufPipe<Self, I, P>;
     }
 
     impl<I, V: Iterator<Item = I> + Sized> IntoViaDatumBufPipe<I> for V {
-        fn via_datum_buf_pipe<P: IntoDatumBufPipe<Input = I>>(
+        fn via_datum_buf_pipe<P: DatumBoundedPipe<Input = I>>(
             self,
             pipe: P,
-        ) -> ViaDatumBufPipe<Self, I, P::IntoBufferedPipe> {
+        ) -> ViaDatumBufPipe<Self, I, P> {
             ViaDatumBufPipe {
                 offset: 0,
                 iterator: self,
-                pipeline: pipe.into_buf_pipe(),
+                pipeline: pipe,
+                buffer: Default::default(),
                 eof: false,
             }
         }
