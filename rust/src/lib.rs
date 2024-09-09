@@ -16,8 +16,11 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-mod core_types;
-pub use core_types::*;
+mod errors;
+pub use errors::*;
+
+mod pipe;
+pub use pipe::*;
 
 // Encoding
 
