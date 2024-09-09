@@ -119,10 +119,14 @@ Due to various limitations -- MSRV limitations, const generics limitations... po
 
 There are two key traits which are the 'entrypoint' to non-allocating iterator pipelines in Datum.
 
-* `DatumBoundedQueue<V>` is a trait defined on `()` and `Option<(V, Q)>` (where `Q: DatumBoundedQueue<V>`). It describes fixed-size queue implementations, and implements various mathematical operations which are used for composition.
-* `DatumBoundedPipe` is a trait defined on a `DatumPipe`. It provides `type OutputQueue: DatumBoundedQueue<(DatumOffset, Self::Output)>`, which in practice defines a type you can use as an output queue for the output of a `feed` call to the given pipe.
+* `datum::unary::Num` is a trait defined on `datum::unary::C0` and `datum::unary::Digit`. It defines unary numbers with addition and multiplication.
+* `DatumBoundedPipe` is a trait defined on a `DatumPipe`. It provides `type OutputQueueSize: unary::Num;`, which lists the maximum amount of output a `feed` call will provide.
 
-`ViaDatumBufPipe` connects the resulting pipelines to iterators.
+This is implemented in terms of `DatumBoundedQueue<V>`, a trait defined on `()` and `Option<(V, Q)>` (where `Q: DatumBoundedQueue<V>`), with some trait magic to convert the number to a queue of appropriate size.
+
+Composed pipes have a buffer that is appropriately resized, accounting for EOF/etc.
+
+`ViaDatumBufPipe` ultimately holds the buffer and uses it as part of implementing an iterator.
 
 ### Why not an iterator stack?
 
