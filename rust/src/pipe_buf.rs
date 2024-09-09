@@ -6,8 +6,8 @@
  */
 
 use crate::{
-    DatumBoundedPipe, DatumBoundedQueue, DatumComposePipe, DatumError, DatumOffset, DatumPipe,
-    DatumResult,
+    sealant::DatumAllPurposeTraitSealant, DatumBoundedPipe, DatumBoundedQueue, DatumComposePipe,
+    DatumError, DatumOffset, DatumPipe, DatumResult,
 };
 
 /// [DatumPipe] with an internal buffer.
@@ -16,8 +16,10 @@ use crate::{
 ///
 /// buffer_feed and buffer_next provide an API using the internal buffer, rather than callbacks.
 ///
+/// _This trait is sealed and cannot be implemented by external code._ (This is to ensure that `DatumBufPipe: IntoDatumBufPipe`)
+///
 /// _Added in 1.2.0._
-pub trait DatumBufferedPipe {
+pub trait DatumBufPipe {
     type Input;
     type Output;
     /// Clears the buffer and sets its contents from the results of the given input.
@@ -26,25 +28,53 @@ pub trait DatumBufferedPipe {
     fn buffer_clear(&mut self);
     /// Gets the next value in the buffer.
     fn buffer_next(&mut self) -> Option<DatumResult<(DatumOffset, Self::Output)>>;
+
+    /// This trait is sealed and not to be implemented in downstream crates.
+    fn __sealed(self) -> DatumAllPurposeTraitSealant<Self>;
 }
 
-/// Converts into a [DatumBufferedPipe] implementation.
+// Implementing DatumPipe for DatumBufPipe allows IntoDatumBufPipe to be defined on DatumBufPipe.
+impl<V: DatumBufPipe> DatumPipe for V {
+    type Input = V::Input;
+    type Output = V::Output;
+
+    fn feed<F: FnMut(DatumOffset, Self::Output) -> DatumResult<()>>(
+        &mut self,
+        at: DatumOffset,
+        i: Option<Self::Input>,
+        f: &mut F,
+    ) -> DatumResult<()> {
+        self.buffer_feed(at, i);
+        loop {
+            match self.buffer_next() {
+                None => break,
+                Some(val) => {
+                    let val = val?;
+                    f(val.0, val.1)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Converts into a [DatumBufPipe] implementation.
 /// This implies the type gains whatever internal buffers are necessary.
 ///
 /// _Added in 1.2.0._
-pub trait IntoDatumBufferedPipe: DatumPipe {
-    type IntoBufferedPipe: DatumBufferedPipe<Input = Self::Input, Output = Self::Output> + Sized;
+pub trait IntoDatumBufPipe: DatumPipe {
+    type IntoBufferedPipe: DatumBufPipe<Input = Self::Input, Output = Self::Output> + Sized;
     fn into_buf_pipe(self) -> Self::IntoBufferedPipe;
 }
 
-impl<V: DatumBoundedPipe> IntoDatumBufferedPipe for V {
+impl<V: DatumBoundedPipe> IntoDatumBufPipe for V {
     type IntoBufferedPipe = DatumBufferedBoundedPipe<V>;
     fn into_buf_pipe(self) -> Self::IntoBufferedPipe {
         DatumBufferedBoundedPipe::new(self)
     }
 }
 
-/// Wraps a [DatumBoundedPipe] to make it a [DatumBufferedPipe].
+/// Wraps a [DatumBoundedPipe] to make it a [DatumBufPipe].
 ///
 /// _Added in 1.2.0._
 #[derive(Clone, Copy, Debug)]
@@ -56,13 +86,20 @@ impl<P: DatumBoundedPipe> DatumBufferedBoundedPipe<P> {
     }
 }
 
+impl<P: DatumBoundedPipe> IntoDatumBufPipe for DatumBufferedBoundedPipe<P> {
+    type IntoBufferedPipe = Self;
+    fn into_buf_pipe(self) -> Self::IntoBufferedPipe {
+        self
+    }
+}
+
 impl<P: DatumBoundedPipe + Default> Default for DatumBufferedBoundedPipe<P> {
     fn default() -> Self {
         Self(Default::default(), Default::default(), None)
     }
 }
 
-impl<P: DatumBoundedPipe> DatumBufferedPipe for DatumBufferedBoundedPipe<P> {
+impl<P: DatumBoundedPipe> DatumBufPipe for DatumBufferedBoundedPipe<P> {
     type Input = P::Input;
     type Output = P::Output;
     fn buffer_feed(&mut self, at: DatumOffset, i: Option<Self::Input>) {
@@ -81,15 +118,18 @@ impl<P: DatumBoundedPipe> DatumBufferedPipe for DatumBufferedBoundedPipe<P> {
         self.2 = None;
     }
     fn buffer_next(&mut self) -> Option<DatumResult<(DatumOffset, Self::Output)>> {
-        if let Some(res) = self.1.pop_front().map(|v| Ok(v)) {
+        if let Some(res) = self.1.pop_front().map(Ok) {
             Some(res)
         } else {
-            self.2.take().map(|v| Err(v))
+            self.2.take().map(Err)
         }
+    }
+    fn __sealed(self) -> DatumAllPurposeTraitSealant<Self> {
+        DatumAllPurposeTraitSealant::new()
     }
 }
 
-impl<A: IntoDatumBufferedPipe, B: IntoDatumBufferedPipe<Input = A::Output>> IntoDatumBufferedPipe
+impl<A: IntoDatumBufPipe, B: IntoDatumBufPipe<Input = A::Output>> IntoDatumBufPipe
     for DatumComposePipe<A, B>
 {
     type IntoBufferedPipe = DatumBufferedComposePipe<A::IntoBufferedPipe, B::IntoBufferedPipe>;
@@ -102,14 +142,14 @@ impl<A: IntoDatumBufferedPipe, B: IntoDatumBufferedPipe<Input = A::Output>> Into
 ///
 /// _Added in 1.2.0._
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct DatumBufferedComposePipe<A: DatumBufferedPipe, B: DatumBufferedPipe<Input = A::Output>> {
+pub struct DatumBufferedComposePipe<A: DatumBufPipe, B: DatumBufPipe<Input = A::Output>> {
     a: A,
     b: B,
     offset: DatumOffset,
     waiting_eof: bool,
 }
 
-impl<A: DatumBufferedPipe, B: DatumBufferedPipe<Input = A::Output>> DatumBufferedComposePipe<A, B> {
+impl<A: DatumBufPipe, B: DatumBufPipe<Input = A::Output>> DatumBufferedComposePipe<A, B> {
     pub fn new(a: A, b: B) -> Self {
         Self {
             a,
@@ -120,7 +160,16 @@ impl<A: DatumBufferedPipe, B: DatumBufferedPipe<Input = A::Output>> DatumBuffere
     }
 }
 
-impl<A: DatumBufferedPipe + Default, B: DatumBufferedPipe<Input = A::Output> + Default> Default
+impl<A: DatumBufPipe, B: DatumBufPipe<Input = A::Output>> IntoDatumBufPipe
+    for DatumBufferedComposePipe<A, B>
+{
+    type IntoBufferedPipe = Self;
+    fn into_buf_pipe(self) -> Self::IntoBufferedPipe {
+        self
+    }
+}
+
+impl<A: DatumBufPipe + Default, B: DatumBufPipe<Input = A::Output> + Default> Default
     for DatumBufferedComposePipe<A, B>
 {
     fn default() -> Self {
@@ -128,7 +177,7 @@ impl<A: DatumBufferedPipe + Default, B: DatumBufferedPipe<Input = A::Output> + D
     }
 }
 
-impl<A: DatumBufferedPipe, B: DatumBufferedPipe<Input = A::Output>> DatumBufferedPipe
+impl<A: DatumBufPipe, B: DatumBufPipe<Input = A::Output>> DatumBufPipe
     for DatumBufferedComposePipe<A, B>
 {
     type Input = A::Input;
@@ -169,5 +218,8 @@ impl<A: DatumBufferedPipe, B: DatumBufferedPipe<Input = A::Output>> DatumBuffere
             // done
             return None;
         }
+    }
+    fn __sealed(self) -> DatumAllPurposeTraitSealant<Self> {
+        DatumAllPurposeTraitSealant::new()
     }
 }

@@ -16,6 +16,8 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+pub mod sealant;
+
 mod errors;
 pub use errors::*;
 

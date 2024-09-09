@@ -76,22 +76,20 @@ mod vdp {
 pub use vdp::*;
 
 mod vdbp {
-    use crate::{DatumBufferedPipe, DatumOffset, DatumResult};
+    use crate::{DatumBufPipe, DatumOffset, DatumResult, IntoDatumBufPipe};
 
-    /// This is used in [IntoViaDatumBufferedPipe::via_datum_buffered_pipe].
+    /// This is used in [IntoViaDatumBufPipe::via_datum_buf_pipe].
     ///
     /// _Added in 1.2.0._
     #[derive(Clone)]
-    pub struct ViaDatumBufferedPipe<I: Iterator<Item = S>, S, P: DatumBufferedPipe<Input = S>> {
+    pub struct ViaDatumBufPipe<I: Iterator<Item = S>, S, P: DatumBufPipe<Input = S>> {
         offset: DatumOffset,
         iterator: I,
         pipeline: P,
         eof: bool,
     }
 
-    impl<I: Iterator<Item = S>, S, P: DatumBufferedPipe<Input = S>> Iterator
-        for ViaDatumBufferedPipe<I, S, P>
-    {
+    impl<I: Iterator<Item = S>, S, P: DatumBufPipe<Input = S>> Iterator for ViaDatumBufPipe<I, S, P> {
         type Item = DatumResult<P::Output>;
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -112,30 +110,30 @@ mod vdbp {
         }
     }
 
-    /// This is used to provide [IntoViaDatumBufferedPipe::via_datum_pipe] on [Iterator].
+    /// This is used to provide [IntoViaDatumBufPipe::via_datum_buf_pipe] on [Iterator].
     ///
     /// _Added in 1.2.0._
-    pub trait IntoViaDatumBufferedPipe<I>: Iterator<Item = I> + Sized {
-        /// Parses/handles elements via a [DatumBufferedPipe].
-        /// The resulting [ViaDatumBufferedPipe] maintains an internal buffer of values to return.
+    pub trait IntoViaDatumBufPipe<I>: Iterator<Item = I> + Sized {
+        /// Parses/handles elements via a [DatumBufPipe] (or convertible via [IntoDatumBufPipe]).
+        /// The resulting [ViaDatumBufPipe] maintains an internal buffer of values to return.
         /// When the iterator runs out of elements, an EOF will be signalled.
         /// At that point, the pipe iterator will no longer retrieve elements from the source.
         /// Offsets are internally managed and start at 0.
-        fn via_datum_buffered_pipe<P: DatumBufferedPipe<Input = I>>(
+        fn via_datum_buf_pipe<P: IntoDatumBufPipe<Input = I>>(
             self,
             pipe: P,
-        ) -> ViaDatumBufferedPipe<Self, I, P>;
+        ) -> ViaDatumBufPipe<Self, I, P::IntoBufferedPipe>;
     }
 
-    impl<I, V: Iterator<Item = I> + Sized> IntoViaDatumBufferedPipe<I> for V {
-        fn via_datum_buffered_pipe<P: DatumBufferedPipe<Input = I>>(
+    impl<I, V: Iterator<Item = I> + Sized> IntoViaDatumBufPipe<I> for V {
+        fn via_datum_buf_pipe<P: IntoDatumBufPipe<Input = I>>(
             self,
             pipe: P,
-        ) -> ViaDatumBufferedPipe<Self, I, P> {
-            ViaDatumBufferedPipe {
+        ) -> ViaDatumBufPipe<Self, I, P::IntoBufferedPipe> {
+            ViaDatumBufPipe {
                 offset: 0,
                 iterator: self,
-                pipeline: pipe,
+                pipeline: pipe.into_buf_pipe(),
                 eof: false,
             }
         }

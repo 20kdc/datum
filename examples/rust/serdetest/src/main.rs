@@ -9,7 +9,7 @@
 
 use std::{cell::Cell, collections::HashMap, env::args, fs::read_to_string};
 
-use datum::{serde::ser::{PlainSerializer, Style}, DatumCharToTokenPipeline, DatumLineNumberTracker, DatumPipe, IntoDatumBufferedPipe, IntoViaDatumBufferedPipe};
+use datum::{serde::ser::{PlainSerializer, Style}, DatumCharToTokenPipeline, DatumLineNumberTracker, DatumPipe, IntoViaDatumBufPipe};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -58,8 +58,8 @@ fn main() {
     let contents = read_to_string(filename).expect("filename should be readable");
     let pipeline: DatumCharToTokenPipeline<String> = DatumCharToTokenPipeline::default();
     let line_number = Cell::new(1);
-    let pipeline = DatumLineNumberTracker::new(&line_number).compose(pipeline).into_buf_pipe();
-    let mut iterator = contents.chars().via_datum_buffered_pipe(pipeline);
+    let pipeline = DatumLineNumberTracker::new(&line_number).compose(pipeline);
+    let mut iterator = contents.chars().via_datum_buf_pipe(pipeline);
     let mut tmp = datum::serde::de::RootDeserializer(datum::serde::de::PlainDeserializer::from_iterator(&mut iterator));
     let des = MyExampleDocument::deserialize(&mut tmp);
     if let Err(err) = des {
