@@ -38,8 +38,8 @@ use core::hash::Hash;
 use core::{convert::TryFrom, fmt::Write};
 
 use crate::{
-    datum_error, DatumAtom, DatumMayContainAtom, DatumOffset, DatumPipe, DatumResult, DatumToken,
-    DatumTokenType, DatumWriter,
+    datum_error, DatumAtom, DatumBoundedPipe, DatumBoundedQueue1, DatumMayContainAtom, DatumOffset,
+    DatumPipe, DatumResult, DatumToken, DatumTokenType, DatumWriter,
 };
 
 /// Datum AST node / value.
@@ -120,6 +120,10 @@ impl DatumMayContainAtom<String> for DatumValue {
 pub struct DatumParser {
     start: DatumOffset,
     stack: Vec<Vec<DatumValue>>,
+}
+
+impl DatumBoundedPipe for DatumParser {
+    type OutputQueue = DatumBoundedQueue1<DatumValue>;
 }
 
 impl DatumPipe for DatumParser {

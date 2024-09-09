@@ -5,7 +5,10 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use crate::{datum_error, DatumChar, DatumCharClass, DatumOffset, DatumPipe, DatumResult};
+use crate::{
+    datum_error, DatumBoundedPipe, DatumBoundedQueue2, DatumChar, DatumCharClass, DatumOffset,
+    DatumPipe, DatumResult,
+};
 
 /// Datum token type.
 /// This is paired with the token contents, if any.
@@ -109,6 +112,10 @@ impl Default for DatumTokenizer {
     fn default() -> Self {
         Self(DatumTokenizerState::Start, false)
     }
+}
+
+impl DatumBoundedPipe for DatumTokenizer {
+    type OutputQueue = DatumBoundedQueue2<DatumTokenizerAction>;
 }
 
 impl DatumPipe for DatumTokenizer {

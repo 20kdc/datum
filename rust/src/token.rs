@@ -15,8 +15,8 @@ use core::{
 use alloc::string::String;
 
 use crate::{
-    datum_error, DatumChar, DatumCharClass, DatumError, DatumOffset, DatumPipe, DatumResult,
-    DatumTokenType, DatumTokenizer, DatumTokenizerAction,
+    datum_error, DatumBoundedPipe, DatumBoundedQueue2, DatumChar, DatumCharClass, DatumError,
+    DatumOffset, DatumPipe, DatumResult, DatumTokenType, DatumTokenizer, DatumTokenizerAction,
 };
 
 /// Datum token with integrated string.
@@ -240,6 +240,10 @@ impl Write for DatumFloatObserver<'_> {
 /// ```
 #[derive(Clone, Default, Debug)]
 pub struct DatumPipeTokenizer<B: Write + Deref<Target = str> + Default>(B, DatumTokenizer);
+
+impl<B: Write + Deref<Target = str> + Default> DatumBoundedPipe for DatumPipeTokenizer<B> {
+    type OutputQueue = DatumBoundedQueue2<DatumToken<B>>;
+}
 
 /// The 'default' [String]-based tokenizer you usually want.
 #[cfg(feature = "alloc")]

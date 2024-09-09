@@ -5,9 +5,6 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-#[cfg(feature = "alloc")]
-use alloc::collections::VecDeque;
-
 use crate::{DatumOffset, DatumResult};
 
 /// Generic "input X, get Y" function
@@ -69,6 +66,68 @@ pub trait DatumPipe {
     }
 }
 
+/// Fixed-size queue-like apparatus, implemented for () and Option(T, Q).
+///
+/// _Added in 1.2.0._
+pub trait DatumBoundedQueue<T>: Sized + Default {
+    fn push_back(&mut self, v: T);
+    fn pop_front(&mut self) -> Option<T>;
+}
+
+impl<T> DatumBoundedQueue<T> for () {
+    fn push_back(&mut self, _v: T) {
+        unreachable!()
+    }
+    fn pop_front(&mut self) -> Option<T> {
+        None
+    }
+}
+
+impl<T, Q: DatumBoundedQueue<T>> DatumBoundedQueue<T> for Option<(T, Q)> {
+    fn push_back(&mut self, v: T) {
+        if let Some(q) = self {
+            q.1.push_back(v);
+        } else {
+            *self = Some((v, Default::default()));
+        }
+    }
+    fn pop_front(&mut self) -> Option<T> {
+        let tmp = self.take();
+        match tmp {
+            Self::None => None,
+            Self::Some((v, mut q)) => {
+                loop {
+                    match q.pop_front() {
+                        None => break,
+                        Some(v2) => self.push_back(v2),
+                    }
+                }
+                Some(v)
+            }
+        }
+    }
+}
+
+/// Bounded queue of length 1.
+///
+/// _Added in 1.2.0._
+pub type DatumBoundedQueue1<V> = Option<((DatumOffset, V), ())>;
+
+/// Bounded queue of length 2.
+///
+/// _Added in 1.2.0._
+pub type DatumBoundedQueue2<V> = Option<((DatumOffset, V), DatumBoundedQueue1<V>)>;
+
+/// [DatumPipe] of bounded output size.
+/// Notably, this can never apply to [DatumComposePipe].
+/// However, it's still useful as a building block.
+///
+/// _Added in 1.2.0._
+pub trait DatumBoundedPipe: DatumPipe {
+    /// Output queue type. Allows writing no-alloc code which can buffer the output of a DatumBoundedPipe.
+    type OutputQueue: DatumBoundedQueue<(DatumOffset, Self::Output)>;
+}
+
 /// Composed pipe.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct DatumComposePipe<A: DatumPipe, B: DatumPipe<Input = A::Output>>(pub A, pub B);
@@ -102,69 +161,6 @@ impl<A: DatumPipe, B: DatumPipe<Input = A::Output>> DatumPipe for DatumComposePi
             m1.feed(at, None, f)
         } else {
             Ok(())
-        }
-    }
-}
-
-/// This is used in [IntoViaDatumPipe::via_datum_pipe].
-#[cfg(feature = "alloc")]
-#[derive(Clone)]
-pub struct ViaDatumPipe<I: Iterator<Item = S>, S, P: DatumPipe<Input = S>> {
-    offset: DatumOffset,
-    iterator: I,
-    pipeline: P,
-    buffer: VecDeque<DatumResult<P::Output>>,
-    eof: bool,
-}
-
-#[cfg(feature = "alloc")]
-impl<I: Iterator<Item = S>, S, P: DatumPipe<Input = S>> Iterator for ViaDatumPipe<I, S, P> {
-    type Item = DatumResult<P::Output>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(res) = self.buffer.pop_front() {
-                return Some(res);
-            } else if self.eof {
-                return None;
-            } else {
-                let base_res = self.iterator.next();
-                let buffer = &mut self.buffer;
-                if base_res.is_none() {
-                    self.eof = true;
-                }
-                if let Err(err) = self.pipeline.feed(self.offset, base_res, &mut |_, v| {
-                    buffer.push_back(Ok(v));
-                    Ok(())
-                }) {
-                    buffer.push_back(Err(err));
-                }
-                self.offset += 1;
-            }
-        }
-    }
-}
-
-/// This is used to provide [IntoViaDatumPipe::via_datum_pipe] on [Iterator].
-#[cfg(feature = "alloc")]
-pub trait IntoViaDatumPipe<I>: Iterator<Item = I> + Sized {
-    /// Parses/handles elements via a [DatumPipe].
-    /// The resulting [ViaDatumPipe] maintains an internal [VecDeque] buffer of values to return.
-    /// When the iterator runs out of elements, an EOF will be signalled.
-    /// At that point, the pipe iterator will no longer retrieve elements from the source.
-    /// Offsets are internally managed and start at 0.
-    fn via_datum_pipe<P: DatumPipe<Input = I>>(self, pipe: P) -> ViaDatumPipe<Self, I, P>;
-}
-
-#[cfg(feature = "alloc")]
-impl<I, V: Iterator<Item = I> + Sized> IntoViaDatumPipe<I> for V {
-    fn via_datum_pipe<P: DatumPipe<Input = I>>(self, pipe: P) -> ViaDatumPipe<Self, I, P> {
-        ViaDatumPipe {
-            offset: 0,
-            iterator: self,
-            pipeline: pipe,
-            buffer: VecDeque::new(),
-            eof: false,
         }
     }
 }

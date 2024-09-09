@@ -5,7 +5,9 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use crate::{datum_error, DatumOffset, DatumPipe, DatumResult};
+use crate::{
+    datum_error, DatumBoundedPipe, DatumBoundedQueue1, DatumOffset, DatumPipe, DatumResult,
+};
 
 const UTF8_DECODE_BUFFER: usize = 4;
 
@@ -17,6 +19,10 @@ pub struct DatumUTF8Decoder {
     buffer: [u8; UTF8_DECODE_BUFFER],
     /// UTF-8 decoding buffer length
     buffer_len: u8,
+}
+
+impl DatumBoundedPipe for DatumUTF8Decoder {
+    type OutputQueue = DatumBoundedQueue1<char>;
 }
 
 impl DatumPipe for DatumUTF8Decoder {
