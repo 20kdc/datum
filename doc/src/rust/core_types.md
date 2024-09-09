@@ -108,3 +108,67 @@ for v in source.chars().via_datum_pipe(datum_char_to_value_pipeline()).map(|v| v
 	println!("{}", v);
 }
 ```
+
+## Non-Allocating Iterators: `DatumBoundedPipe`
+
+So a problem with `DatumViaPipe` is that it works by using a `VecDeque` to store the queued elements.
+
+However, in no-std environments, `VecDeque` isn't a thing.
+
+Due to various limitations -- MSRV limitations, const generics limitations... point is, due to various limitations, the solution for this is a bit internally awkward, but should be fine as a library user.
+
+There are two key traits which are the 'entrypoint' to non-allocating iterator pipelines in Datum.
+
+* `DatumBoundedQueue<V>` is a trait defined on `()` and `Option<(V, Q)>` (where `Q: DatumBoundedQueue<V>`). It describes fixed-size queue implementations.
+* `DatumBoundedPipe` is a trait defined on a `DatumPipe`. It provides `type OutputQueue: DatumBoundedQueue<(DatumOffset, Self::Output)>`, which in practice defines a type you can use as an output queue for the output of a `feed` call to the given pipe.
+
+These 'entrypoint' traits are then supported by two 'mid-level' traits:
+
+* `DatumBufPipe` is a sealed trait (unimplementable outside of this crate) covering 'internally buffering' pipes.
+* While `DatumBufPipe: IntoDatumBufPipe` is not specified, all implementations of `DatumBufPipe` are `DatumIntoBufPipe`. This complexity is due to, among other things, trait coherence.
+
+Those traits are supported by their implementations:
+
+* `DatumBufBoundedPipe` is an implementation of `DatumBufPipe` wrapping a `DatumBoundedPipe`.
+* `DatumBufComposePipe` is essentially the same as `DatumComposePipe`, but for `DatumBufPipe`.
+* `IntoDatumBufPipe` has a blanket implementation on all `DatumBoundedPipe` which uses `DatumBufBoundedPipe`.
+
+And finally, `ViaDatumBufPipe` connects the resulting pipelines to iterators.
+
+Unfortunately, it had to be done this way because of a mixture of reasons...
+
+### Why not one big queue at the end?
+
+Generic consts are bad even in latest Rust ; that's what stopped me from releasing it with the crate's 1.0.
+
+And stages multiply -- if the first stage can output 2 items per input, and the second stage can output 2 items per input, then the queue length is 4.
+
+Only, it's not that simple either, because of EOF. EOF both outputs items and contributes an "extra item"; the EOF item. So you have to increment 1 for each stage except the last.
+
+Now, as I said, generic consts are bad. So all of these mathematical operations would have to be done via type magicks. Any mistakes are a breaking semver change.
+
+I started to try this, but the conclusion I came to was that if I didn't stabilize something soon I wouldn't release anything -- I'd be reworking the API forever.
+
+...If you're reading this and 1.2.0 hasn't shipped yet, then that probably means I'm trying to give the unary approach one last shot.
+
+I don't _like_ `DatumBufPipe`, it's too much implementation-in-parallel. Had it been integrated from the start... well, I'll be honest, I don't have much hope for it even then, it's not a nice API, it screams problems.
+
+### Why not an iterator stack?
+
+The pipeline couldn't be represented as an iterator stack without either `impl Trait` or GATs.
+
+The problem was basically the difference between "a compose is processing this" and "a bounded pipe node is processing this".
+
+And since composes are made up of arbitrary other pipes, this was kinda important.
+
+The conversion for one bounded pipe would be, say: `PipeIterator<I, P>`.
+
+The conversion for a compose of two bounded pipes would be, say: `PipeIterator<PipeIterator<I, A>, B>`.
+
+The problem here is that `I` type argument, the base iterator. A compose can have (and does have) an associated type covering the composition. But adding an iterator into that, say, `type AsIterator<I: Iterator<...>> = ...;` -- that makes the associated type generic, a GAT.
+
+The other option, the first one I tried, was simply using `impl Trait`. After making it all work, I then found out `impl Trait` was not actually supported on the target MSRV.
+
+Ultimately, what I ended up doing was pushing the responsibility of composing the buffered pipes into a trait _independent of the base iterator._ That's `DatumBufPipe`.
+
+`IntoDatumBufPipe` exists to fix the UX issues that having this whole parallel pipe typeset causes, and keeping `DatumBufPipe` sealed limits the damage.
