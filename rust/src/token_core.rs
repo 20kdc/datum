@@ -6,8 +6,8 @@
  */
 
 use crate::{
-    datum_error, DatumBoundedPipe, DatumBoundedQueue2, DatumChar, DatumCharClass, DatumOffset,
-    DatumPipe, DatumResult,
+    datum_error, unary, DatumBoundedPipe, DatumChar, DatumCharClass, DatumOffset, DatumPipe,
+    DatumResult,
 };
 
 /// Datum token type.
@@ -115,7 +115,7 @@ impl Default for DatumTokenizer {
 }
 
 impl DatumBoundedPipe for DatumTokenizer {
-    type OutputQueue = DatumBoundedQueue2<DatumTokenizerAction>;
+    type OutputQueueSize = unary::C2;
 }
 
 impl DatumPipe for DatumTokenizer {

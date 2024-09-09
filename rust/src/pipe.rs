@@ -5,7 +5,7 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use crate::{DatumBoundedQueue, DatumBoundedQueueMul, DatumBoundedQueueOfType, DatumOffset, DatumResult};
+use crate::{unary, DatumBoundedQueue, DatumOffset, DatumResult, DatumUnaryNumIntoQueue};
 
 /// Generic "input X, get Y" function
 pub trait DatumPipe {
@@ -66,24 +66,28 @@ pub trait DatumPipe {
     }
 }
 
-/// Bounded queue of length 1.
-///
-/// _Added in 1.2.0._
-pub type DatumBoundedQueue1<V> = Option<((DatumOffset, V), ())>;
-
-/// Bounded queue of length 2.
-///
-/// _Added in 1.2.0._
-pub type DatumBoundedQueue2<V> = Option<((DatumOffset, V), DatumBoundedQueue1<V>)>;
-
 /// [DatumPipe] of bounded output size.
-/// Notably, this can never apply to [DatumComposePipe].
-/// However, it's still useful as a building block.
 ///
 /// _Added in 1.2.0._
 pub trait DatumBoundedPipe: DatumPipe {
-    /// Output queue type. Allows writing no-alloc code which can buffer the output of a DatumBoundedPipe.
+    /// Output queue length. Allows writing no-alloc code which can buffer the output of a DatumBoundedPipe.
+    /// It is a guarantee (on pain of panic) that a feed call will never output more than this many elements.
+    type OutputQueueSize: unary::Num;
+}
+
+/// Produces useful type relations for [DatumBoundedPipe], a [DatumPipe] of bounded output size.
+///
+/// _Added in 1.2.0._
+pub trait DatumBoundedPipeEx: DatumBoundedPipe {
     type OutputQueue: DatumBoundedQueue<(DatumOffset, Self::Output)>;
+}
+
+impl<
+        V: DatumBoundedPipe<OutputQueueSize = OQS>,
+        OQS: DatumUnaryNumIntoQueue<(DatumOffset, V::Output)>,
+    > DatumBoundedPipeEx for V
+{
+    type OutputQueue = OQS::Queue;
 }
 
 /// Composed pipe.
@@ -127,13 +131,12 @@ impl<A: DatumPipe, B: DatumPipe<Input = A::Output>> DatumPipe for DatumComposePi
 // B can output (len(A) + 1) * len(B).
 
 impl<
-        A: DatumBoundedPipe<OutputQueue = AQ>,
-        B: DatumBoundedPipe<Input = A::Output, OutputQueue = BQ>,
-        AQ: DatumBoundedQueueOfType<(DatumOffset, B::Output), Changed = AQC>,
-        AQC: DatumBoundedQueue<(DatumOffset, B::Output), Inc = AQCI>,
-        AQCI: DatumBoundedQueue<(DatumOffset, B::Output)>,
-        BQ: DatumBoundedQueueMul<(DatumOffset, B::Output), AQCI>
+        A: DatumBoundedPipe<OutputQueueSize = AQ>,
+        B: DatumBoundedPipe<Input = A::Output, OutputQueueSize = BQ>,
+        AQ: unary::Num<Inc = AQI>,
+        AQI: unary::Num,
+        BQ: unary::Mul<AQI>,
     > DatumBoundedPipe for DatumComposePipe<A, B>
 {
-    type OutputQueue = BQ::Mul;
+    type OutputQueueSize = BQ::Mul;
 }

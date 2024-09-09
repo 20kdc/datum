@@ -86,9 +86,7 @@ fn do_roundtrip_test(input: &str, output: &str) {
     let i2pipeline: DatumByteToTokenPipeline<String> = Default::default();
     let i2pipeline = i2pipeline.compose(DatumParser::default());
     // must compile
-    _ = out_str
-        .bytes()
-        .via_datum_buf_pipe(i2pipeline.clone());
+    _ = out_str.bytes().via_datum_buf_pipe(i2pipeline.clone());
     assert_eq!(
         out_str
             .bytes()

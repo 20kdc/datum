@@ -8,7 +8,7 @@
 use core::{cell::Cell, marker::PhantomData};
 
 use crate::{
-    DatumBoundedPipe, DatumBoundedQueue1, DatumComposePipe, DatumDecoder, DatumOffset, DatumPipe,
+    unary, DatumBoundedPipe, DatumComposePipe, DatumDecoder, DatumOffset, DatumPipe,
     DatumPipeTokenizer, DatumResult, DatumUTF8Decoder,
 };
 
@@ -122,5 +122,5 @@ impl<V: Copy + Into<u32>> DatumPipe for DatumLineNumberTracker<'_, V> {
 }
 
 impl<V: Copy + Into<u32>> DatumBoundedPipe for DatumLineNumberTracker<'_, V> {
-    type OutputQueue = DatumBoundedQueue1<V>;
+    type OutputQueueSize = unary::C1;
 }

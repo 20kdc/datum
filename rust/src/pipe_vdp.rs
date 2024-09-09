@@ -76,13 +76,13 @@ mod vdp {
 pub use vdp::*;
 
 mod vdbp {
-    use crate::{DatumBoundedPipe, DatumBoundedQueue, DatumOffset, DatumResult};
+    use crate::{DatumBoundedPipeEx, DatumBoundedQueue, DatumOffset, DatumResult};
 
     /// This is used in [IntoViaDatumBufPipe::via_datum_buf_pipe].
     ///
     /// _Added in 1.2.0._
     #[derive(Clone)]
-    pub struct ViaDatumBufPipe<I: Iterator<Item = S>, S, P: DatumBoundedPipe<Input = S>> {
+    pub struct ViaDatumBufPipe<I: Iterator<Item = S>, S, P: DatumBoundedPipeEx<Input = S>> {
         offset: DatumOffset,
         iterator: I,
         pipeline: P,
@@ -90,7 +90,9 @@ mod vdbp {
         eof: bool,
     }
 
-    impl<I: Iterator<Item = S>, S, P: DatumBoundedPipe<Input = S>> Iterator for ViaDatumBufPipe<I, S, P> {
+    impl<I: Iterator<Item = S>, S, P: DatumBoundedPipeEx<Input = S>> Iterator
+        for ViaDatumBufPipe<I, S, P>
+    {
         type Item = DatumResult<P::Output>;
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -122,19 +124,19 @@ mod vdbp {
     ///
     /// _Added in 1.2.0._
     pub trait IntoViaDatumBufPipe<I>: Iterator<Item = I> + Sized {
-        /// Parses/handles elements via a [DatumBufPipe] (or convertible via [IntoDatumBufPipe]).
+        /// Parses/handles elements via a [DatumBoundedPipeEx].
         /// The resulting [ViaDatumBufPipe] maintains an internal buffer of values to return.
         /// When the iterator runs out of elements, an EOF will be signalled.
         /// At that point, the pipe iterator will no longer retrieve elements from the source.
         /// Offsets are internally managed and start at 0.
-        fn via_datum_buf_pipe<P: DatumBoundedPipe<Input = I>>(
+        fn via_datum_buf_pipe<P: DatumBoundedPipeEx<Input = I>>(
             self,
             pipe: P,
         ) -> ViaDatumBufPipe<Self, I, P>;
     }
 
     impl<I, V: Iterator<Item = I> + Sized> IntoViaDatumBufPipe<I> for V {
-        fn via_datum_buf_pipe<P: DatumBoundedPipe<Input = I>>(
+        fn via_datum_buf_pipe<P: DatumBoundedPipeEx<Input = I>>(
             self,
             pipe: P,
         ) -> ViaDatumBufPipe<Self, I, P> {

@@ -19,6 +19,8 @@ extern crate alloc;
 mod errors;
 pub use errors::*;
 
+pub mod unary;
+
 mod queue;
 pub use queue::*;
 

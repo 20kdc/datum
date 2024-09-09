@@ -5,10 +5,7 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
-use crate::{
-    datum_error, DatumBoundedPipe, DatumBoundedQueue1, DatumChar, DatumOffset, DatumPipe,
-    DatumResult,
-};
+use crate::{datum_error, unary, DatumBoundedPipe, DatumChar, DatumOffset, DatumPipe, DatumResult};
 
 /// Decoder's state machine
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -30,7 +27,7 @@ impl Default for DatumDecoder {
 }
 
 impl DatumBoundedPipe for DatumDecoder {
-    type OutputQueue = DatumBoundedQueue1<DatumChar>;
+    type OutputQueueSize = unary::C1;
 }
 
 impl DatumPipe for DatumDecoder {
