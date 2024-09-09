@@ -70,11 +70,40 @@ pub trait DatumPipe {
 ///
 /// _Added in 1.2.0._
 pub trait DatumBoundedQueue<T>: Sized + Default {
+    /// A queue of +1 length.
+    type Inc: DatumBoundedQueue<T>;
+
     fn push_back(&mut self, v: T);
     fn pop_front(&mut self) -> Option<T>;
 }
 
+/// Fixed-size queue-like apparatus: Add
+///
+/// _Added in 1.2.0._
+pub trait DatumBoundedQueueAdd<T, O: DatumBoundedQueue<T>>: DatumBoundedQueue<T> {
+    /// Added together.
+    type Add: DatumBoundedQueue<T>;
+}
+
+/// Fixed-size queue-like apparatus: Mul
+///
+/// _Added in 1.2.0._
+pub trait DatumBoundedQueueMul<T, O: DatumBoundedQueue<T>>: DatumBoundedQueue<T> {
+    /// Added together.
+    type Mul: DatumBoundedQueue<T>;
+}
+
+/// Fixed-size queue-like apparatus: type changer
+///
+/// _Added in 1.2.0._
+pub trait DatumBoundedQueueOfType<T> {
+    /// Adjusted type.
+    type Changed: DatumBoundedQueue<T>;
+}
+
 impl<T> DatumBoundedQueue<T> for () {
+    type Inc = Option<(T, Self)>;
+
     fn push_back(&mut self, _v: T) {
         unreachable!()
     }
@@ -83,7 +112,13 @@ impl<T> DatumBoundedQueue<T> for () {
     }
 }
 
+impl<T> DatumBoundedQueueOfType<T> for () {
+    type Changed = ();
+}
+
 impl<T, Q: DatumBoundedQueue<T>> DatumBoundedQueue<T> for Option<(T, Q)> {
+    type Inc = Option<(T, Self)>;
+
     fn push_back(&mut self, v: T) {
         if let Some(q) = self {
             q.1.push_back(v);
@@ -106,6 +141,46 @@ impl<T, Q: DatumBoundedQueue<T>> DatumBoundedQueue<T> for Option<(T, Q)> {
             }
         }
     }
+}
+
+impl<T, Q: DatumBoundedQueueOfType<N>, N> DatumBoundedQueueOfType<N> for Option<(T, Q)> {
+    type Changed = Option<(N, Q::Changed)>;
+}
+
+impl<T, O: DatumBoundedQueue<T>> DatumBoundedQueueAdd<T, O> for () {
+    type Add = O;
+}
+
+impl<T, O: DatumBoundedQueue<T>> DatumBoundedQueueMul<T, O> for () {
+    type Mul = ();
+}
+
+impl<
+        T,
+        Q: DatumBoundedQueue<T> + DatumBoundedQueueAdd<T, OI>,
+        O: DatumBoundedQueue<T, Inc = OI>,
+        OI: DatumBoundedQueue<T>,
+    > DatumBoundedQueueAdd<T, O> for Option<(T, Q)>
+{
+    // Q = Self - 1
+    // OI = O + 1
+    // Add = Q + OI
+    // Therefore Add = Self + O
+    type Add = Q::Add;
+}
+
+impl<
+        T,
+        Q: DatumBoundedQueue<T> + DatumBoundedQueueMul<T, O, Mul = OMQ>,
+        OMQ: DatumBoundedQueue<T>,
+        O: DatumBoundedQueue<T> + DatumBoundedQueueAdd<T, OMQ>,
+    > DatumBoundedQueueMul<T, O> for Option<(T, Q)>
+{
+    // Q = Self - 1
+    // OMQ = O * Q
+    // Add = OMQ + O
+    // Therefore Add = Self * O
+    type Mul = O::Add;
 }
 
 /// Bounded queue of length 1.
@@ -163,4 +238,15 @@ impl<A: DatumPipe, B: DatumPipe<Input = A::Output>> DatumPipe for DatumComposePi
             Ok(())
         }
     }
+}
+
+impl<
+        A: DatumBoundedPipe<OutputQueue = AQ>,
+        B: DatumBoundedPipe<Input = A::Output, OutputQueue = BQ>,
+        AQ: DatumBoundedQueueOfType<(DatumOffset, B::Output)>,
+        BQ: DatumBoundedQueueAdd<(DatumOffset, B::Output), BQ, Add = BQM2>,
+        BQM2: DatumBoundedQueueMul<(DatumOffset, B::Output), AQ::Changed>,
+    > DatumBoundedPipe for DatumComposePipe<A, B>
+{
+    type OutputQueue = BQM2::Mul;
 }

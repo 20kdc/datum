@@ -6,8 +6,8 @@
  */
 
 use crate::{
-    sealant::DatumAllPurposeTraitSealant, DatumBoundedPipe, DatumBoundedQueue, DatumComposePipe,
-    DatumError, DatumOffset, DatumPipe, DatumResult,
+    sealant::DatumAllPurposeTraitSealant, DatumBoundedPipe, DatumBoundedQueue, DatumError,
+    DatumOffset, DatumPipe, DatumResult,
 };
 
 /// [DatumPipe] with an internal buffer.
@@ -33,22 +33,6 @@ pub trait DatumBufPipe {
     fn buffer_clear(&mut self);
     /// Gets the next value in the buffer.
     fn buffer_next(&mut self) -> Option<DatumResult<(DatumOffset, Self::Output)>>;
-
-    /// Composes with another pipeline.
-    fn compose_buf<P: DatumBufPipe<Input = Self::Output>>(
-        self,
-        other: P,
-    ) -> DatumBufComposePipe<Self, P>
-    where
-        Self: Sized,
-    {
-        DatumBufComposePipe {
-            a: self,
-            b: other,
-            offset: 0,
-            waiting_eof: false,
-        }
-    }
 
     /// This trait is sealed and not to be implemented in downstream crates.
     fn __sealed(self) -> DatumAllPurposeTraitSealant<Self>;
@@ -143,90 +127,6 @@ impl<P: DatumBoundedPipe> DatumBufPipe for DatumBufBoundedPipe<P> {
             Some(res)
         } else {
             self.2.take().map(Err)
-        }
-    }
-    fn __sealed(self) -> DatumAllPurposeTraitSealant<Self> {
-        DatumAllPurposeTraitSealant::new()
-    }
-}
-
-impl<A: IntoDatumBufPipe, B: IntoDatumBufPipe<Input = A::Output>> IntoDatumBufPipe
-    for DatumComposePipe<A, B>
-{
-    type IntoBufferedPipe = DatumBufComposePipe<A::IntoBufferedPipe, B::IntoBufferedPipe>;
-    fn into_buf_pipe(self) -> Self::IntoBufferedPipe {
-        self.0.into_buf_pipe().compose_buf(self.1.into_buf_pipe())
-    }
-}
-
-/// Composed buffered pipe.
-///
-/// _Added in 1.2.0._
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct DatumBufComposePipe<A: DatumBufPipe, B: DatumBufPipe<Input = A::Output>> {
-    a: A,
-    b: B,
-    offset: DatumOffset,
-    waiting_eof: bool,
-}
-
-impl<A: DatumBufPipe, B: DatumBufPipe<Input = A::Output>> IntoDatumBufPipe
-    for DatumBufComposePipe<A, B>
-{
-    type IntoBufferedPipe = Self;
-    fn into_buf_pipe(self) -> Self::IntoBufferedPipe {
-        self
-    }
-}
-
-impl<A: DatumBufPipe + Default, B: DatumBufPipe<Input = A::Output> + Default> Default
-    for DatumBufComposePipe<A, B>
-{
-    fn default() -> Self {
-        A::default().compose_buf(B::default())
-    }
-}
-
-impl<A: DatumBufPipe, B: DatumBufPipe<Input = A::Output>> DatumBufPipe
-    for DatumBufComposePipe<A, B>
-{
-    type Input = A::Input;
-    type Output = B::Output;
-
-    fn buffer_feed(&mut self, at: DatumOffset, i: Option<Self::Input>) {
-        self.offset = at;
-        self.b.buffer_clear();
-        self.waiting_eof |= i.is_none();
-        self.a.buffer_feed(at, i);
-    }
-    fn buffer_clear(&mut self) {
-        self.a.buffer_clear();
-        self.b.buffer_clear();
-        self.waiting_eof = false;
-    }
-    fn buffer_next(&mut self) -> Option<DatumResult<(DatumOffset, Self::Output)>> {
-        loop {
-            // B buffer check
-            if let Some(v) = self.b.buffer_next() {
-                return Some(v);
-            }
-            // A buffer check
-            match self.a.buffer_next() {
-                Some(Ok(v)) => {
-                    self.b.buffer_feed(v.0, Some(v.1));
-                    continue;
-                }
-                Some(Err(err)) => return Some(Err(err)),
-                None => {}
-            }
-            // we fed an EOF to A earlier, we have to now inform B
-            if self.waiting_eof {
-                self.waiting_eof = false;
-                self.b.buffer_feed(self.offset, None);
-                continue;
-            }
-            // done
-            return None;
         }
     }
     fn __sealed(self) -> DatumAllPurposeTraitSealant<Self> {

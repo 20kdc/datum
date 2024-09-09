@@ -111,6 +111,8 @@ for v in source.chars().via_datum_pipe(datum_char_to_value_pipeline()).map(|v| v
 
 ## Non-Allocating Iterators: `DatumBoundedPipe`
 
+**TODO!!! TURNS OUT UNARY TYPES DO WORK IN OLD RUST IF YOU'RE CRAZY ENOUGH. CODE IS STILL BEING CLEANED UP**
+
 So a problem with `DatumViaPipe` is that it works by using a `VecDeque` to store the queued elements.
 
 However, in no-std environments, `VecDeque` isn't a thing.
