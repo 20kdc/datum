@@ -37,6 +37,7 @@ impl<'iterator, B: Default + Deref<Target = str>> PlainDeserializer<'iterator, B
             last_seen_offset: 0,
         }
     }
+
     /// Checks if a next token exists.
     /// Errors indicate non-EOF errors.
     pub fn has_next_token(&mut self) -> error::Result<bool> {

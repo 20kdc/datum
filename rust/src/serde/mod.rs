@@ -9,6 +9,12 @@
 //!
 //! _Added in 1.1.0._
 
+use core::{fmt::Write, ops::Deref};
+
+use serde::{Deserialize, Serialize};
+
+use crate::{DatumResult, DatumToken};
+
 pub mod error {
     use crate::DatumError;
 
@@ -34,6 +40,92 @@ pub mod error {
 
 pub mod de;
 pub mod ser;
+
+/// Document layout descriptor.
+///
+/// Added in 1.2.0.
+#[non_exhaustive]
+#[derive(Clone, PartialEq, Eq)]
+pub enum DocLayout {
+    Plain,
+    Root,
+}
+
+impl DocLayout {
+    /// Deserialize from a token iterator.
+    pub fn deserialize_tokens<'a, V: Deserialize<'a>, B: Default + Deref<Target = str>>(
+        &self,
+        iterator: &mut dyn Iterator<Item = DatumResult<DatumToken<B>>>,
+    ) -> error::Result<V> {
+        match self {
+            Self::Plain => {
+                let mut it = de::PlainDeserializer::from_iterator(iterator);
+                V::deserialize(&mut it)
+            }
+            Self::Root => {
+                let mut it = de::RootDeserializer::from_iterator(iterator);
+                V::deserialize(&mut it)
+            }
+        }
+    }
+
+    /// Serialize to a [Write] implementation (including [String]).
+    ///
+    /// _Importantly, this should not be used in a 'chained' fashion, as the writing state is reset between calls._
+    /// _This is for one-off writes only._
+    pub fn serialize_to<V: Serialize>(
+        &self,
+        v: &V,
+        w: &mut dyn Write,
+        style: ser::Style,
+    ) -> error::Result<()> {
+        match self {
+            Self::Plain => {
+                let mut it = ser::PlainSerializer::new(w, style);
+                v.serialize(&mut it)
+            }
+            Self::Root => {
+                let mut it = ser::RootSerializer::new(w, style);
+                v.serialize(&mut it)
+            }
+        }
+    }
+
+    /// Deserialize from a str.
+    #[cfg(feature = "alloc")]
+    pub fn deserialize_str<'a, V: Deserialize<'a>, S: Deref<Target = str>>(
+        &self,
+        text: S,
+    ) -> error::Result<V> {
+        use crate::{datum_char_to_token_pipeline, IntoViaDatumPipe};
+
+        let mut token_iterator = text.chars().via_datum_pipe(datum_char_to_token_pipeline());
+        self.deserialize_tokens(&mut token_iterator)
+    }
+
+    /// Serialize to a [alloc::string::String].
+    #[cfg(feature = "alloc")]
+    pub fn serialize_to_string<V: Serialize>(
+        &self,
+        v: &V,
+        style: ser::Style,
+    ) -> error::Result<alloc::string::String> {
+        let mut res = alloc::string::String::new();
+        self.serialize_to(v, &mut res, style)?;
+        Ok(res)
+    }
+
+    /// Deserialize from a file. _Beware: Allocates room for the whole file. Completely ignores trailing values._
+    #[cfg(feature = "std")]
+    pub fn deserialize_file<'a, V: Deserialize<'a>, P: AsRef<std::path::Path>>(
+        &self,
+        path: P,
+    ) -> error::Result<V> {
+        use serde::de::Error;
+        let file = std::fs::read_to_string(path).map_err(|e| error::Error::custom(e))?;
+        self.deserialize_str(file)
+    }
+}
 
 #[cfg(feature = "alloc")]
 #[cfg(feature = "_serde_test_features")]

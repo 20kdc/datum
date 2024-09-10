@@ -5,6 +5,8 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
+use core::fmt::Write;
+
 use serde::de::Error;
 use serde::ser::{
     SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
@@ -16,7 +18,7 @@ use crate::DatumAtom;
 
 use crate::serde::error;
 
-use super::PlainSerializer;
+use super::{PlainSerializer, Style};
 
 /// [RootSerializer] serializes a document as a root-level sequence or map.
 /// This is intended to match [crate::serde::de::RootDeserializer].
@@ -24,7 +26,14 @@ use super::PlainSerializer;
 /// _Added in 1.1.0._
 pub struct RootSerializer<'write>(pub PlainSerializer<'write>);
 
-impl RootSerializer<'_> {
+impl<'write> RootSerializer<'write> {
+    /// Creates a new serializer.
+    ///
+    /// _Added in 1.2.0._
+    pub fn new(target: &'write mut dyn Write, style: Style) -> Self {
+        Self(PlainSerializer::new(target, style))
+    }
+
     fn write_atom(&mut self, atom: DatumAtom<&str>) -> error::Result<()> {
         self.0.write_atom(atom)?;
         self.0.fmt_seq_newline()

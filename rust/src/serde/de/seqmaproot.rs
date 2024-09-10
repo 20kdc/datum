@@ -12,7 +12,7 @@ use serde::{
     forward_to_deserialize_any, Deserializer,
 };
 
-use crate::serde::error;
+use crate::{serde::error, DatumResult, DatumToken};
 
 use crate::serde::de::PlainDeserializer;
 
@@ -24,6 +24,17 @@ use crate::serde::de::PlainDeserializer;
 pub struct RootDeserializer<'iterator, B: Default + Deref<Target = str>>(
     pub PlainDeserializer<'iterator, B>,
 );
+
+impl<'iterator, B: Default + Deref<Target = str>> RootDeserializer<'iterator, B> {
+    /// Creates the Deserializer from an iterator.
+    ///
+    /// _Added in 1.2.0._
+    pub fn from_iterator(
+        iterator: &'iterator mut dyn Iterator<Item = DatumResult<DatumToken<B>>>,
+    ) -> Self {
+        Self(PlainDeserializer::from_iterator(iterator))
+    }
+}
 
 impl<'de, 'a, B: Default + Deref<Target = str>> Deserializer<'de>
     for &'a mut RootDeserializer<'_, B>
