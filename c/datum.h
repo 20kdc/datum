@@ -43,22 +43,52 @@ typedef struct datum_loc {
 } datum_loc_t;
 
 /*
- * Character classes.
+ * Token type.
+ * Note that these have only an 4-bit room to move due to the space of DATUM_TKN_CORE flags.
  */
-#define DATUM_CHRC_VALIDPID 0x0100
-#define DATUM_CHRC_NUMSTART 0x0200
+typedef enum {
+	/* This token type value is an intentional 'null'. */
+	DATUM_TKNTY_NONE,
+	DATUM_TKNTY_STRING,
+	DATUM_TKNTY_ID,
+	DATUM_TKNTY_SPECIAL_ID,
+	DATUM_TKNTY_NUMERIC,
+	DATUM_TKNTY_LIST_START,
+	DATUM_TKNTY_LIST_END,
+	DATUM_TKNTY_COUNT,
+	/* Special value for datum_tkn_string. */
+	DATUM_TKNTY_ERROR = DATUM_TKNTY_COUNT
+} datum_tknty_t;
+
+/* Describes a token type. */
+DATUM_API const char * datum_tknty_describe(datum_tknty_t ty);
+
+/*
+ * Character classes.
+ * Canonically int; bounded to int16_t.
+ */
+#define DATUM_CHRC_VALIDPID      0x0010
+#define DATUM_CHRC_NUMSTART      0x0020
+#define DATUM_CHRC_ALONETKN      0x0040
+#define DATUM_CHRC_SPACEISH      0x0080
+
+#define DATUM_CHRC_ALONETKN_SHIFT 8
+#define DATUM_CHRC_ALONETKN_MASK 0x0F00
+#define DATUM_CHRC_ALONETKN_ENC(V) (DATUM_CHRC_ALONETKN | ((V) << DATUM_CHRC_ALONETKN_SHIFT))
 
 #define DATUM_CHRC_UNCLASSIFIED  0
 #define DATUM_CHRC_CONTENT       (1 | DATUM_CHRC_VALIDPID)
-#define DATUM_CHRC_WHITESPACE    2
-#define DATUM_CHRC_NEWLINE       3
-#define DATUM_CHRC_LINECOMMENT   4
+#define DATUM_CHRC_WHITESPACE    (2 | DATUM_CHRC_SPACEISH)
+#define DATUM_CHRC_NEWLINE       (3 | DATUM_CHRC_SPACEISH)
+#define DATUM_CHRC_LINE_COMMENT  4
 #define DATUM_CHRC_STRING        5
-#define DATUM_CHRC_LISTSTART     6
-#define DATUM_CHRC_LISTEND       7
-#define DATUM_CHRC_SPECIALID     (8 | DATUM_CHRC_VALIDPID)
+#define DATUM_CHRC_LIST_START    (6 | DATUM_CHRC_ALONETKN_ENC(DATUM_TKNTY_LIST_START))
+#define DATUM_CHRC_LIST_END      (7 | DATUM_CHRC_ALONETKN_ENC(DATUM_TKNTY_LIST_END))
+#define DATUM_CHRC_SPECIAL_ID    (8 | DATUM_CHRC_VALIDPID)
 #define DATUM_CHRC_DIGIT         (9 | DATUM_CHRC_VALIDPID | DATUM_CHRC_NUMSTART)
 #define DATUM_CHRC_SIGN         (10 | DATUM_CHRC_VALIDPID | DATUM_CHRC_NUMSTART)
+/* Special 'end of file/stream' character class. */
+#define DATUM_CHRC_EOF          (11 | DATUM_CHRC_SPACEISH)
 
 /* Identifies the character class of a character. */
 DATUM_API int datum_chrc_identify(char c);
@@ -104,43 +134,53 @@ DATUM_API char * datum_cdec_utf8_emit(char * to, uint32_t codepoint);
 DATUM_API char * datum_cdec_collapse(char * start, char * end);
 
 /*
- * Token type.
+ * Tokenizer core.
+ * This implements the *rules* of tokenization, but doesn't conveniently package them.
+ * Tokenizer responses are made of a series of flags.
+ * These flags apply in the given order.
  */
-typedef enum {
-	DATUM_TKNT_STRING,
-	DATUM_TKNT_ID,
-	DATUM_TKNT_SPECIAL_ID,
-	DATUM_TKNT_NUMERIC,
-	DATUM_TKNT_LIST_START,
-	DATUM_TKNT_LIST_END,
-	DATUM_TKNT_COUNT
-} datum_tknt_t;
 
 /*
- * Tokenizer responses.
+ * Before this character, end the current token. Uses DATUM_TKN_CORE_PRE_MASK / DATUM_TKN_CORE_PRE_SHIFT.
+ * IMPORTANT RULE: If this is set, then for the present character, the tokenizer was internally reset.
+ * Therefore, you can do the same to safely resume parsing.
+ * This can be helpful if PRE_END and POST_END are both set and this is a problem.
  */
-#define DATUM_TKNR_INCOMPLETE 0x0100
+#define DATUM_TKN_CORE_PRE_END          0x8000
+/* Before this character, start a new token. */
+#define DATUM_TKN_CORE_PRE_START        0x4000
+/* After this character, end the current token. Uses DATUM_TKN_CORE_POST_MASK / DATUM_TKN_CORE_POST_SHIFT */
+#define DATUM_TKN_CORE_POST_END         0x2000
+/* After this character, start a new token. */
+#define DATUM_TKN_CORE_POST_START       0x1000
+/* Indicates an incomplete token error (in response to EOF 'character'). */
+#define DATUM_TKN_CORE_ERROR            0x0800
 
-#define DATUM_TKNR_OK                0
-#define DATUM_TKNR_CDEC_INCOMPLETE   (1 | DATUM_TKNR_INCOMPLETE)
-#define DATUM_TKNR_STRING_INCOMPLETE (2 | DATUM_TKNR_INCOMPLETE)
-#define DATUM_TKNR_CDEC_ERROR        3
+/* Token type for PRE_END */
+#define DATUM_TKN_CORE_PRE_MASK         0x00F0
+#define DATUM_TKN_CORE_PRE_SHIFT        4
+/* Token type for POST_END */
+#define DATUM_TKN_CORE_POST_MASK        0x000F
+#define DATUM_TKN_CORE_POST_SHIFT       0
 
 /*
- * Tokenize the given input text.
- * Returns a DATUM_TKNR_ code.
- * 'DATUM_TKNR_INCOMPLETE' can be used to test for the obvious.
- * The `input` slice will have its start move forward as tokens are successfully completed.
- * This is exactly aligned to calls to the `token` function.
- * This function is given a 'content' slice into `input`.
- * For strings, for instance, this is the 'inside' of the string.
- * The contents of this slice may safely be mutated if that is allowed for `input`.
- * In particular `datum_chrc_collapse` may be used.
- * If the `token` function returns a non-zero result, tokenization stops immediately.
- * This can be used for a variety of purposes, like one-token-at-a-time retrieval.
+ * Similar to CDEC, state must be initialized to 0.
+ * Unlike CDEC, EOF is an explicit character class rather than implied by state.
+ * This is because EOF might i.e. end a token normally.
  */
-/* Not yet implemented. */
-DATUM_API int datum_tokenize(datum_str_t * input, int (*token)(void * userdata, datum_tknt_t tokenType, datum_str_t * content), void * userdata);
+DATUM_API int datum_tkn_core(int * state, int chrc);
+
+/*
+ * Advances an `input` slice. The content slice of the token is placed in `content`.
+ * Notably, if a token is returned, then it is guaranteed that input and content will not overlap.
+ * Therefore, it is safe to call this in a loop with `datum_cdec_collapse`.
+ * (Note however that list start/end tokens will waste time if collapsed unnecessarily.)
+ * Returns:
+ * * A token type
+ * * DATUM_TKNTY_NONE (no token found)
+ * * DATUM_TKNTY_ERROR (half-open string, CDEC error...)
+ */
+DATUM_API datum_tknty_t datum_tkn_string(datum_str_t * input, datum_str_t * content);
 
 #ifdef __cplusplus
 }
