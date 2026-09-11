@@ -1,0 +1,3 @@
+#!/bin/sh
+set -e
+cc -o examples/c/roundtrip c/datum.c examples/c/roundtrip.c -I c -std=c89 -Wpedantic
