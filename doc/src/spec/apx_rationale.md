@@ -1,5 +1,12 @@
 # Appendix: Rationale
 
+## Changelog
+
+* September 2026, revision A:
+	* The 'forbidden characters' logic is really part of the encoding layer, since it's affected by. Only 'absolutes' not affected by state now live in the 'File Encoding' section, while all the stateful details live in 'Encoding'. It's been correctly clarified that the reason forbidden characters are forbidden is because, by not having a class, they aren't actually allowed to escape the encoding layer (which must assign them a class); this neatly encapsulates why it's okay if they're escaped.
+	* A previous revision of this specification simply said character 13 'can be escaped'. This is ambiguous and even implementations in this repository seem to have disagreed by accident. Consistent behaviour cross-OS and Rust implementation being frozen took priority.
+	* Character 13 is considered forbidden. This has no actual effect, because Character 13 can't escape being discarded in the input stream, but it simplifies the definition of 'forbidden' to have less holes in it.
+
 ## What about the security implications of all of this leeway?
 
 Datum is designed to be written primarily by humans and used in scenarioes where different interpretations are not a security-relevant factor.
@@ -80,3 +87,9 @@ The user can track the 'expected integer value' of whatever is being written via
 Errors from the traditional buffer can be deferred until the token is returned.
 
 Float parsing, however, is hard, and mistakes can be very, very subtle, and very, very bad. For this reason, no generalized 'streaming number parser' implementation exists in Datum.
+
+## Why are 'raw' newlines not valid escapes?
+
+1. Line comments aren't handled in the encoding layer, because that would mean the encoding layer would need to know about things which would start and stop line comments, or the tokenizer would have to tell it. If you look at the Rust implementation it becomes pretty clear why that's not an option.
+2. Given this, if you could escape newlines shell-style writing `\` at the end of a line comment would silently turn the next line into part of a line comment.
+3. It's very unlikely you'd want to write a newline inside a symbol non-explicitly, and Datum _allows_ having newlines in _strings_ without escaping them.

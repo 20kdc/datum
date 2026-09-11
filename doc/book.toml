@@ -1,7 +1,6 @@
 [book]
 authors = ["t20kdc"]
 language = "en"
-multilingual = false
 src = "src"
 title = "Datum - The Documentation"
 

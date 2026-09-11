@@ -50,15 +50,20 @@ public final class DatumReaderTokenSource extends DatumTokenSource {
         return chr;
     }
 
+    private int readerReadNoCR() {
+        int val = readerRead();
+        while (val == 13)
+            val = readerRead();
+        return val;
+    }
+
     private int decodeNextChar() {
         if (holdingCell != -1) {
             int tmp = holdingCell;
             holdingCell = -1;
             return tmp;
         }
-        int val = readerRead();
-        while (val == 13)
-            val = readerRead();
+        int val = readerReadNoCR();
         if (val == -1)
             return -1;
         lastCharClass = DatumCharClass.identify((char) val);
@@ -69,7 +74,7 @@ public final class DatumReaderTokenSource extends DatumTokenSource {
             return val;
         }
         lastCharClass = DatumCharClass.Content;
-        val = readerRead();
+        val = readerReadNoCR();
         if (val == -1)
             throw new DatumPositionedException(srcLoc(), "\\ without escape");
         if (val == '\n')
@@ -83,7 +88,7 @@ public final class DatumReaderTokenSource extends DatumTokenSource {
         if (val == 'x') {
             int res = 0;
             while (true) {
-                int dig = readerRead();
+                int dig = readerReadNoCR();
                 if (dig == -1)
                     throw new DatumPositionedException(srcLoc(), "Interrupted hex escape");
                 if (dig == ';')

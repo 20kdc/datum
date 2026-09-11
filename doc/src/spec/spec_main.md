@@ -15,9 +15,9 @@ Datum-formatted data is a stream of 'characters'. Anything ASCII-based is permit
 
 The document MUST be valid text for the format it's in.
 
-Characters 0 through 8 inclusive, 11, 12, 14 through 31 inclusive, and 127, are *forbidden;* their presence in the input stream is invalid (can be escaped, except 0).
+Character 0 is _always invalid._
 
-Character 13 (CR) is discarded, as if it wasn't there (can be escaped).
+Character 13 (CR) is discarded, as if it wasn't there. (This doesn't affect higher-level syntax such as `\r`, which is not discarded.)
 
 ## Data Model
 
@@ -36,6 +36,15 @@ Implementations are allowed to reject any file according to resource limits, inc
 ## Encoding
 
 The encoding layer converts characters to a different stream of *class-tagged characters.*
+
+### 'Forbidden' Characters
+
+Characters 0 through 8 inclusive, 11 through 31 inclusive, and 127, are *forbidden,* which as later described, causes them to be unclassified, and thus can't be given to the tokenizer, making them _automatically_ invalid.
+
+These characters can mostly be escaped, which gives them _content-class_ and thus makes them valid. There are two key exceptions:
+
+* Character 0 cannot be escaped due to being _always_ invalid anyway. However, implementations may choose to ignore this as previously described.
+* Character 13 (CR) _cannot possibly end up here,_ because it's already been discarded. It's convenient to describe it as forbidden, as it makes it unclassified.
 
 ### Escape Sequences
 
@@ -58,7 +67,8 @@ There are a number of character classes defined here, used in tokenization.
 
 * 10 is *newline-class*.
 * 9 (tab) and 32 (space) are *whitespace-class*.
-* All *forbidden* characters, along with 13 (CR) and 92 `\`, are *unclassified.*
+* All *forbidden* characters, along with 92 `\`, are *unclassified.*
+	* Unclassified characters should ideally not even be escaping the encoding layer.
 * 59 `;` is *line-comment-class*.
 * 34 `"` is *string-class*.
 * 40 `(` is *list-start-class*.
@@ -67,6 +77,7 @@ There are a number of character classes defined here, used in tokenization.
 * 45 `-` is *sign-class*.
 * 48 `0` through 57 `9` inclusive is *digit-class*.
 * All other characters, *including all characters (UTF-8, UTF-16, Unicode, or otherwise) above 127,* are *content-class*.
+	* This also covers any other character that has been escaped, as previously mentioned.
 
 There are also the following class groups:
 
