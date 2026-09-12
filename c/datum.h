@@ -5,6 +5,17 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
+/*
+ * `datum.h`: datum-c 'core API'.
+ * Scope is:
+ * * Basic reading/writing
+ * * Enough APIs for construction of simple DSLs
+ * Scope is NOT:
+ * * AST
+ * * Atom comprehension (implies floats)
+ * * Anything that requires malloc, free
+ */
+
 #ifndef _IT_DATUM_C_H_
 
 #define _IT_DATUM_C_H_
@@ -24,12 +35,16 @@ extern "C" {
 
 /*
  * Datum string slice type.
- * Datum-C never allocates strings by itself.
- * As a side-effect of this, it isn't capable of the 'pure streaming' workflow of other implementations.
+ * This 'core API' of datum-c never allocates strings by itself.
+ * As a side-effect of this, any streamed decoding must be managed through the exposed state machines.
  * However, this keeps memory management/etc. extremely simple, which is important in a C codebase.
  */
 typedef struct datum_str {
 	const char * start;
+	/*
+	 * End of the slice. The end MUST NOT be before the start.
+	 * Therefore, when setting start, set end.
+	 */
 	const char * end;
 } datum_str_t;
 
@@ -142,19 +157,26 @@ DATUM_API char * datum_cdec_collapse(char * start, char * end);
 
 /*
  * Before this character, end the current token. Uses DATUM_TKN_CORE_PRE_MASK / DATUM_TKN_CORE_PRE_SHIFT.
- * IMPORTANT RULE: If this is set, then for the present character, the tokenizer was internally reset.
+ * IMPORTANT RULE: There is an absolute guarantee this event reset the tokenizer after the emitted token.
  * Therefore, you can do the same to safely resume parsing.
- * This can be helpful if PRE_END and POST_END are both set and this is a problem.
+ * This means that APIs do not have to emit more than one token at a time.
  */
-#define DATUM_TKN_CORE_PRE_END          0x8000
+#define DATUM_TKN_CORE_PRE_END_AND_RESET 0x8000
 /* Before this character, start a new token. */
-#define DATUM_TKN_CORE_PRE_START        0x4000
+#define DATUM_TKN_CORE_PRE_START         0x4000
 /* After this character, end the current token. Uses DATUM_TKN_CORE_POST_MASK / DATUM_TKN_CORE_POST_SHIFT */
-#define DATUM_TKN_CORE_POST_END         0x2000
+#define DATUM_TKN_CORE_POST_END          0x2000
 /* After this character, start a new token. */
-#define DATUM_TKN_CORE_POST_START       0x1000
+#define DATUM_TKN_CORE_POST_START        0x1000
 /* Indicates an incomplete token error (in response to EOF 'character'). */
-#define DATUM_TKN_CORE_ERROR            0x0800
+#define DATUM_TKN_CORE_ERROR             0x0800
+
+/*
+ * This flag indicates POST_END should not include the final character in content.
+ * Remember that 'character' here means CDEC unit, so multiple `char` can be in a character.
+ * This is used for strings. Strings end proper after the final '"', but that mustn't be included in content.
+ */
+#define DATUM_TKN_CORE_POST_END_SKIP    0x0400
 
 /* Token type for PRE_END */
 #define DATUM_TKN_CORE_PRE_MASK         0x00F0

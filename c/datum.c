@@ -74,14 +74,18 @@ DATUM_API uint32_t datum_cdec_decode(uint32_t * state, char input) {
 			return DATUM_CDEC_PRESENT | (input & DATUM_CDEC_BYTE_MASK);
 		/* escape (deciding outcome) */
 		case DATUM_CDEC_STATE_ESCAPE:
-			if (input == 'r') {
-				return DATUM_CDEC_PRESENT | DATUM_CDEC_ESCAPED | '\r';
-			} else if (input == 'n') {
-				return DATUM_CDEC_PRESENT | DATUM_CDEC_ESCAPED | '\n';
-			} else if (input == 't') {
-				return DATUM_CDEC_PRESENT | DATUM_CDEC_ESCAPED | '\t';
-			} else if (input == 'x') {
+			if (input == 'x') {
 				*state = DATUM_CDEC_STATE_HEX(0);
+				return 0;
+			}
+			/* If not a hex escape, will always end in default state. */
+			*state = DATUM_CDEC_STATE_DEFAULT;
+			if (input == 'r') {
+				input = '\r';
+			} else if (input == 'n') {
+				input = '\n';
+			} else if (input == 't') {
+				input = '\t';
 				return 0;
 			}
 			return DATUM_CDEC_PRESENT | DATUM_CDEC_ESCAPED | (input & DATUM_CDEC_BYTE_MASK);
@@ -167,88 +171,97 @@ DATUM_API char * datum_cdec_collapse(char * start, char * end) {
 #define DATUM_TKN_STATE_PID 6
 
 DATUM_API int datum_tkn_core(int * state, int chrc) {
-	int events = 0;
-	reinterpret:
-	/*
-	printf("tkn %i <- %i\n", *state, chrc);
-	*/
-	switch (*state) {
-		/* Default state (eating whitespace) */
-		case DATUM_TKN_STATE_DEFAULT:
-		default:
-			if (chrc & DATUM_CHRC_SPACEISH) {
-				/* nothing interesting */
-			} else if (chrc & DATUM_CHRC_ALONETKN) {
-				/* 'alone token' (single-char) */
-				int aloneToken = (chrc & DATUM_CHRC_ALONETKN_MASK) >> DATUM_CHRC_ALONETKN_SHIFT;
-				events |= DATUM_TKN_CORE_PRE_START | DATUM_TKN_CORE_POST_END | (aloneToken << DATUM_TKN_CORE_POST_SHIFT);
-			} else if (chrc == DATUM_CHRC_LINE_COMMENT) {
-				*state = DATUM_TKN_STATE_LINE_COMMENT;
-			} else if (chrc == DATUM_CHRC_STRING) {
-				/* drop quotes */
-				events |= DATUM_TKN_CORE_POST_START;
-				*state = DATUM_TKN_STATE_STRING;
-			} else if (chrc == DATUM_CHRC_SPECIAL_ID) {
-				/* special ID drops its prefix char */
-				events |= DATUM_TKN_CORE_POST_START;
-				*state = DATUM_TKN_STATE_PID_SPECIALID;
-				/* all other PID routes do not */
-			} else if (chrc == DATUM_CHRC_DIGIT) {
-				events |= DATUM_TKN_CORE_PRE_START;
-				*state = DATUM_TKN_STATE_PID_DIGIT;
-			} else if (chrc == DATUM_CHRC_SIGN) {
-				events |= DATUM_TKN_CORE_PRE_START;
-				*state = DATUM_TKN_STATE_PID_SIGN;
-			} else {
-				events |= DATUM_TKN_CORE_PRE_START;
-				*state = DATUM_TKN_STATE_PID;
-			}
+	int events;
+	events = 0;
+	while (1) {
+		int newEvents = 0;
+		/*
+		printf("tkn %i <- %i\n", *state, chrc);
+		*/
+		/*
+		 * IMPORTANT RULES:
+		 * * DATUM_TKN_STATE_DEFAULT must not cause DATUM_TKN_CORE_PRE_END_AND_RESET.
+		 *   This would cause an infinite loop.
+		 * * DATUM_TKN_CORE_PRE_END can only be combined with its parameter and DATUM_TKN_CORE_ERROR.
+		 *   It AUTOMATICALLY resets state, as this is the only valid use of this flag.
+		 */
+		switch (*state) {
+			/* Default state (eating whitespace) */
+			case DATUM_TKN_STATE_DEFAULT:
+			default:
+				if (chrc & DATUM_CHRC_SPACEISH) {
+					/* nothing interesting */
+				} else if (chrc & DATUM_CHRC_ALONETKN) {
+					/* 'alone token' (single-char) */
+					int aloneToken = (chrc & DATUM_CHRC_ALONETKN_MASK) >> DATUM_CHRC_ALONETKN_SHIFT;
+					newEvents |= DATUM_TKN_CORE_PRE_START | DATUM_TKN_CORE_POST_END | (aloneToken << DATUM_TKN_CORE_POST_SHIFT);
+				} else if (chrc == DATUM_CHRC_LINE_COMMENT) {
+					*state = DATUM_TKN_STATE_LINE_COMMENT;
+				} else if (chrc == DATUM_CHRC_STRING) {
+					/* drop quotes */
+					newEvents |= DATUM_TKN_CORE_POST_START;
+					*state = DATUM_TKN_STATE_STRING;
+				} else if (chrc == DATUM_CHRC_SPECIAL_ID) {
+					/* special ID drops its prefix char */
+					newEvents |= DATUM_TKN_CORE_POST_START;
+					*state = DATUM_TKN_STATE_PID_SPECIALID;
+					/* all other PID routes do not */
+				} else if (chrc == DATUM_CHRC_DIGIT) {
+					newEvents |= DATUM_TKN_CORE_PRE_START;
+					*state = DATUM_TKN_STATE_PID_DIGIT;
+				} else if (chrc == DATUM_CHRC_SIGN) {
+					newEvents |= DATUM_TKN_CORE_PRE_START;
+					*state = DATUM_TKN_STATE_PID_SIGN;
+				} else {
+					newEvents |= DATUM_TKN_CORE_PRE_START;
+					*state = DATUM_TKN_STATE_PID;
+				}
+				break;
+			case DATUM_TKN_STATE_LINE_COMMENT:
+				if (chrc == DATUM_CHRC_NEWLINE)
+					*state = DATUM_TKN_STATE_DEFAULT;
+				break;
+			case DATUM_TKN_STATE_STRING:
+				if (chrc == DATUM_CHRC_EOF) {
+					newEvents |= DATUM_TKN_CORE_ERROR | DATUM_TKN_CORE_PRE_END_AND_RESET | (DATUM_TKNTY_STRING << DATUM_TKN_CORE_PRE_SHIFT);
+				} else if (chrc == DATUM_CHRC_STRING) {
+					newEvents |= DATUM_TKN_CORE_POST_END | DATUM_TKN_CORE_POST_END_SKIP | (DATUM_TKNTY_STRING << DATUM_TKN_CORE_POST_SHIFT);
+					*state = DATUM_TKN_STATE_DEFAULT;
+				}
+				break;
+			/* PID loop always continues until not VALIDPID (EOF is obviously not VALIDPID) */
+			case DATUM_TKN_STATE_PID_DIGIT:
+				if (!(chrc & DATUM_CHRC_VALIDPID))
+					newEvents |= DATUM_TKN_CORE_PRE_END_AND_RESET | (DATUM_TKNTY_NUMERIC << DATUM_TKN_CORE_PRE_SHIFT);
+				break;
+			case DATUM_TKN_STATE_PID_SIGN:
+				/* Sign either becomes ID immediately or switches to digit codepath */
+				if (!(chrc & DATUM_CHRC_VALIDPID)) {
+					newEvents |= DATUM_TKN_CORE_PRE_END_AND_RESET | (DATUM_TKNTY_ID << DATUM_TKN_CORE_PRE_SHIFT);
+				} else {
+					*state = DATUM_TKN_STATE_PID_DIGIT;
+				}
+				break;
+			case DATUM_TKN_STATE_PID_SPECIALID:
+				if (!(chrc & DATUM_CHRC_VALIDPID))
+					newEvents |= DATUM_TKN_CORE_PRE_END_AND_RESET | (DATUM_TKNTY_SPECIAL_ID << DATUM_TKN_CORE_PRE_SHIFT);
+				break;
+			case DATUM_TKN_STATE_PID:
+				if (!(chrc & DATUM_CHRC_VALIDPID))
+					newEvents |= DATUM_TKN_CORE_PRE_END_AND_RESET | (DATUM_TKNTY_ID << DATUM_TKN_CORE_PRE_SHIFT);
+				break;
+		}
+		events |= newEvents;
+		/*
+		 * This covers the situation where a character has to be interpreted twice.
+		 * This happens when DATUM_TKN_CORE_PRE_END_AND_RESET occurs at the end of a token.
+		 */
+		if (newEvents & DATUM_TKN_CORE_PRE_END_AND_RESET) {
+			*state = DATUM_TKN_STATE_DEFAULT;
+			/* and loop */
+		} else {
 			break;
-		case DATUM_TKN_STATE_LINE_COMMENT:
-			if (chrc == DATUM_CHRC_NEWLINE)
-				*state = DATUM_TKN_STATE_DEFAULT;
-			break;
-		case DATUM_TKN_STATE_STRING:
-			if (chrc == DATUM_CHRC_EOF) {
-				events |= DATUM_TKN_CORE_ERROR | DATUM_TKN_CORE_PRE_END | (DATUM_TKNTY_STRING << DATUM_TKN_CORE_PRE_SHIFT);
-				*state = DATUM_TKN_STATE_DEFAULT;
-			} else if (chrc == DATUM_CHRC_STRING) {
-				events |= DATUM_TKN_CORE_PRE_END | (DATUM_TKNTY_STRING << DATUM_TKN_CORE_PRE_SHIFT);
-				*state = DATUM_TKN_STATE_DEFAULT;
-			}
-			break;
-		/* PID loop always continues until not VALIDPID (EOF is obviously not VALIDPID) */
-		case DATUM_TKN_STATE_PID_DIGIT:
-			if (!(chrc & DATUM_CHRC_VALIDPID)) {
-				events |= DATUM_TKN_CORE_PRE_END | (DATUM_TKNTY_NUMERIC << DATUM_TKN_CORE_PRE_SHIFT);
-				*state = DATUM_TKN_STATE_DEFAULT;
-				goto reinterpret;
-			}
-			break;
-		case DATUM_TKN_STATE_PID_SIGN:
-			/* Sign either becomes ID immediately or switches to digit codepath */
-			if (!(chrc & DATUM_CHRC_VALIDPID)) {
-				events |= DATUM_TKN_CORE_PRE_END | (DATUM_TKNTY_ID << DATUM_TKN_CORE_PRE_SHIFT);
-				*state = DATUM_TKN_STATE_DEFAULT;
-				goto reinterpret;
-			} else {
-				*state = DATUM_TKN_STATE_PID_DIGIT;
-			}
-			break;
-		case DATUM_TKN_STATE_PID_SPECIALID:
-			if (!(chrc & DATUM_CHRC_VALIDPID)) {
-				events |= DATUM_TKN_CORE_PRE_END | (DATUM_TKNTY_SPECIAL_ID << DATUM_TKN_CORE_PRE_SHIFT);
-				*state = DATUM_TKN_STATE_DEFAULT;
-				goto reinterpret;
-			}
-			break;
-		case DATUM_TKN_STATE_PID:
-			if (!(chrc & DATUM_CHRC_VALIDPID)) {
-				events |= DATUM_TKN_CORE_PRE_END | (DATUM_TKNTY_ID << DATUM_TKN_CORE_PRE_SHIFT);
-				*state = DATUM_TKN_STATE_DEFAULT;
-				goto reinterpret;
-			}
-			break;
+		}
 	}
 	return events;
 }
@@ -263,19 +276,24 @@ DATUM_API datum_tknty_t datum_tkn_string(datum_str_t * input, datum_str_t * cont
 	 * 'pre' character in this case should be pointing to '\'.
 	 * cdecStart therefore is the start of the current CDEC character.
 	 */
-	const char * cdecStart;
-	cdecStart = content->start = content->end = input->start;
-	while (input->start != input->end) {
-		char chr = *input->start;
+	const char * cdecStart, * cdecEnd;
+	cdecStart = cdecEnd = content->start = content->end = input->start;
+	/*
+	 * To ensure input->start only moves in CDEC-aligned units,
+	 *  our read pointer is cdecEnd, which is the end of the current CDEC unit.
+	 */
+	while (cdecEnd != input->end) {
+		char chr = *(cdecEnd++);
 		int cls;
 		cdecIfo = datum_cdec_decode(&cdecState, chr);
 		if (cdecIfo & DATUM_CDEC_ERROR)
-			return DATUM_TKNTY_ERROR;
-		if (!(cdecIfo & DATUM_CDEC_PRESENT)) {
-			input->start++;
+			goto error;
+		if (!(cdecIfo & DATUM_CDEC_PRESENT))
 			continue;
-		}
-		/* got a 'real character', get class */
+		/*
+		 * Got a 'real character'.
+		 * For "\n", cdecStart is at the start while cdecEnd is at the end (so empty string here).
+		 */
 		if (cdecIfo & DATUM_CDEC_ESCAPED) {
 			cls = DATUM_CHRC_CONTENT;
 		} else {
@@ -286,39 +304,58 @@ DATUM_API datum_tknty_t datum_tkn_string(datum_str_t * input, datum_str_t * cont
 		 */
 		/* tokenizer */
 		tknIfo = datum_tkn_core(&tknState, cls);
+		if (tknIfo & DATUM_TKN_CORE_ERROR)
+			goto error;
 		/* 'pre' phase */
-		if (tknIfo & DATUM_TKN_CORE_PRE_END) {
+		if (tknIfo & DATUM_TKN_CORE_PRE_END_AND_RESET) {
+			/*
+			 * Token ends at start of CDEC unit and resets.
+			 * Continuing must thus reparse entire CDEC unit.
+			 */
 			content->end = cdecStart;
-			/* it's safe to stop now, see comment on DATUM_TKN_CORE_PRE_END */
+			input->start = cdecStart;
+			/* it's safe to stop now (hence the 'AND_RESET') */
 			return (tknIfo & DATUM_TKN_CORE_PRE_MASK) >> DATUM_TKN_CORE_PRE_SHIFT;
 		}
-		if (tknIfo & DATUM_TKN_CORE_PRE_START)
-			content->start = cdecStart;
-		/* between phases */
-		input->start++;
-		/*
-		 * We just passed the end of something CDEC considers a character boundary.
-		 * This is the only time cdecStart can advance.
-		 */
-		cdecStart = input->start;
+		if (tknIfo & DATUM_TKN_CORE_PRE_START) {
+			/* Token starts at start of CDEC unit. */
+			content->end = content->start = cdecStart;
+		}
 		/* 'post' phase */
 		if (tknIfo & DATUM_TKN_CORE_POST_END) {
-			content->end = cdecStart;
+			input->start = cdecEnd;
+			content->end = (tknIfo & DATUM_TKN_CORE_POST_END_SKIP) ? cdecStart : cdecEnd;
 			return (tknIfo & DATUM_TKN_CORE_POST_MASK) >> DATUM_TKN_CORE_POST_SHIFT;
 		}
 		if (tknIfo & DATUM_TKN_CORE_POST_START)
-			content->start = cdecStart;
+			content->end = content->start = cdecEnd;
+		/* Finally, advance CDEC window. */
+		cdecStart = cdecEnd;
 	}
+	/*
+	 * EOF hit.
+	 * The following are absolutes.
+	 * errorEOF helps express this (we still have to adjust content->start for error)
+	 */
+	content->end = input->start = input->end;
 	/* check for incomplete CDEC */
 	if (cdecState)
 		return DATUM_TKNTY_ERROR;
-	/* there is no outcome where a token is returned AND content->end is not input->end */
 	tknIfo = datum_tkn_core(&tknState, DATUM_CHRC_EOF);
 	if (tknIfo & DATUM_TKN_CORE_ERROR)
 		return DATUM_TKNTY_ERROR;
-	if (tknIfo & DATUM_TKN_CORE_PRE_END) {
-		content->end = input->end;
+	if (tknIfo & DATUM_TKN_CORE_PRE_END_AND_RESET)
 		return (tknIfo & DATUM_TKN_CORE_PRE_MASK) >> DATUM_TKN_CORE_PRE_SHIFT;
-	}
+	/* Since we're returning no token, act like it */
+	content->start = input->end;
 	return DATUM_TKNTY_NONE;
+
+	/*
+	 * All error handlers follow this format for consistency.
+	 * Input is advanced so that 'naive forgiving loops' will not freeze.
+	 */
+	error:
+	content->end = cdecEnd;
+	input->start = cdecEnd;
+	return DATUM_TKNTY_ERROR;
 }
