@@ -6,8 +6,102 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "datum.h"
 
-int main(int argc, char ** argv) {
+#define FILE_BUF_SIZE 0x10000
 
+char buf_input[FILE_BUF_SIZE];
+char buf_compare[FILE_BUF_SIZE];
+char buf_output[FILE_BUF_SIZE];
+char * buf_output_ptr = buf_output;
+
+datum_str_t readfile(char * buf, const char * fn) {
+	size_t pos;
+	datum_str_t str;
+	size_t length;
+	FILE * f = fopen(fn, "rb");
+	if (!f) {
+		printf("invalid file %s", fn);
+		exit(1);
+	}
+	fseek(f, 0, SEEK_END);
+	length = (size_t) ftell(f);
+	if (length >= FILE_BUF_SIZE) {
+		printf("file %s is too big", fn);
+		exit(1);
+	}
+	fseek(f, 0, SEEK_SET);
+	for (pos = 0; pos < length; pos++)
+		buf[pos] = fgetc(f);
+	fclose(f);
+	str.start = buf;
+	str.end = buf + length;
+	return str;
+}
+
+int outputfn(int c, void * stream) {
+	if (buf_output_ptr == (buf_output + FILE_BUF_SIZE))
+		return -1;
+	*(buf_output_ptr++) = c;
+	return 0;
+}
+
+void dumpoutput() {
+	const char * report_ptr = buf_output;
+	while (report_ptr != buf_output_ptr)
+		putchar(*(report_ptr++));
+}
+
+int main(int argc, char ** argv) {
+	datum_str_t input, compare;
+	int listdepth = 0;
+	int space = 0;
+	if (argc != 3) {
+		puts("roundtrip INPUT COMPARE");
+		return 1;
+	}
+	input = readfile(buf_input, argv[1]);
+	compare = readfile(buf_compare, argv[2]);
+	/* tokenize input and write to output inline */
+	while (input.start != input.end) {
+		datum_str_t content;
+		datum_tknty_t tknt = datum_tkn_string(&input, &content);
+		if (tknt == DATUM_TKNTY_ERROR) {
+			printf("roundtrip: Unexpected error reading %s - dumping output so far", argv[1]);
+			dumpoutput();
+			return 1;
+		}
+		if (tknt == DATUM_TKNTY_NONE)
+			continue;
+		if (space) {
+			if (tknt != DATUM_TKNTY_LIST_END)
+				outputfn(' ', NULL);
+			space = 0;
+		}
+		if (tknt == DATUM_TKNTY_LIST_START)
+			listdepth++;
+		else if (tknt == DATUM_TKNTY_LIST_END)
+			listdepth--;
+		content.end = datum_cdec_collapse((char *) content.start, (char *) content.end);
+		if (datum_tknwr(tknt, &content, outputfn, NULL)) {
+			printf("roundtrip: Unexpected error mimicking %s - dumping output so far", argv[1]);
+			dumpoutput();
+			return 1;
+		}
+		if (tknt != DATUM_TKNTY_LIST_START)
+			space = 1;
+		if (listdepth == 0) {
+			outputfn('\n', NULL);
+			space = 0;
+		}
+	}
+	if (((compare.end - compare.start) != (buf_output_ptr - buf_output)) || memcmp(buf_compare, buf_output, buf_output_ptr - buf_output)) {
+		printf("roundtrip: comparison failure for %s, %s\n", argv[1], argv[2]);
+		dumpoutput();
+		return 1;
+	}
+	return 0;
 }

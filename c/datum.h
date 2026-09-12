@@ -59,7 +59,7 @@ typedef struct datum_loc {
 
 /*
  * Token type.
- * Note that these have only an 4-bit room to move due to the space of DATUM_TKN_CORE flags.
+ * Note that these have only an 4-bit room to move due to the space of DATUM_TKN_CORE_TOKEN_MASK.
  */
 typedef enum {
 	/* This token type value is an intentional 'null'. */
@@ -85,7 +85,7 @@ DATUM_API const char * datum_tknty_describe(datum_tknty_t ty);
 #define DATUM_CHRC_VALIDPID      0x0010
 #define DATUM_CHRC_NUMSTART      0x0020
 #define DATUM_CHRC_ALONETKN      0x0040
-#define DATUM_CHRC_SPACEISH      0x0080
+#define DATUM_CHRC_NONPRINT      0x0080
 
 #define DATUM_CHRC_ALONETKN_SHIFT 8
 #define DATUM_CHRC_ALONETKN_MASK 0x0F00
@@ -93,8 +93,8 @@ DATUM_API const char * datum_tknty_describe(datum_tknty_t ty);
 
 #define DATUM_CHRC_UNCLASSIFIED  0
 #define DATUM_CHRC_CONTENT       (1 | DATUM_CHRC_VALIDPID)
-#define DATUM_CHRC_WHITESPACE    (2 | DATUM_CHRC_SPACEISH)
-#define DATUM_CHRC_NEWLINE       (3 | DATUM_CHRC_SPACEISH)
+#define DATUM_CHRC_WHITESPACE    (2 | DATUM_CHRC_NONPRINT)
+#define DATUM_CHRC_NEWLINE       (3 | DATUM_CHRC_NONPRINT)
 #define DATUM_CHRC_LINE_COMMENT  4
 #define DATUM_CHRC_STRING        5
 #define DATUM_CHRC_LIST_START    (6 | DATUM_CHRC_ALONETKN_ENC(DATUM_TKNTY_LIST_START))
@@ -103,7 +103,7 @@ DATUM_API const char * datum_tknty_describe(datum_tknty_t ty);
 #define DATUM_CHRC_DIGIT         (9 | DATUM_CHRC_VALIDPID | DATUM_CHRC_NUMSTART)
 #define DATUM_CHRC_SIGN         (10 | DATUM_CHRC_VALIDPID | DATUM_CHRC_NUMSTART)
 /* Special 'end of file/stream' character class. */
-#define DATUM_CHRC_EOF          (11 | DATUM_CHRC_SPACEISH)
+#define DATUM_CHRC_EOF          (11 | DATUM_CHRC_NONPRINT)
 
 /* Identifies the character class of a character. */
 DATUM_API int datum_chrc_identify(char c);
@@ -151,39 +151,54 @@ DATUM_API char * datum_cdec_collapse(char * start, char * end);
 /*
  * Tokenizer core.
  * This implements the *rules* of tokenization, but doesn't conveniently package them.
- * Tokenizer responses are made of a series of flags.
- * These flags apply in the given order.
- */
-
-/*
- * Before this character, end the current token. Uses DATUM_TKN_CORE_PRE_MASK / DATUM_TKN_CORE_PRE_SHIFT.
- * IMPORTANT RULE: There is an absolute guarantee this event reset the tokenizer after the emitted token.
- * Therefore, you can do the same to safely resume parsing.
- * This means that APIs do not have to emit more than one token at a time.
- */
-#define DATUM_TKN_CORE_PRE_END_AND_RESET 0x8000
-/* Before this character, start a new token. */
-#define DATUM_TKN_CORE_PRE_START         0x4000
-/* After this character, end the current token. Uses DATUM_TKN_CORE_POST_MASK / DATUM_TKN_CORE_POST_SHIFT */
-#define DATUM_TKN_CORE_POST_END          0x2000
-/* After this character, start a new token. */
-#define DATUM_TKN_CORE_POST_START        0x1000
-/* Indicates an incomplete token error (in response to EOF 'character'). */
-#define DATUM_TKN_CORE_ERROR             0x0800
-
-/*
- * This flag indicates POST_END should not include the final character in content.
+ * The tokenizer responds with an ACT.
  * Remember that 'character' here means CDEC unit, so multiple `char` can be in a character.
+ * These are split into:
+ * * 'NOP' acts (more decoded characters needed, continue)
+ * * 'START' acts (place token start marker before/after current character, continue)
+ * * 'END' acts (finish token before/after current character, do not continue. tokenizer reset guaranteed)
+ *
+ * Errors are returned with 'END' with the error token type.
+ */
+
+#define DATUM_TKN_CORE_ACT_MASK              0xF0
+/*
+ * Token type mask for *_END.
+ */
+#define DATUM_TKN_CORE_TOKEN_MASK            0x0F
+
+/* Nothing to do here. */
+#define DATUM_TKN_CORE_ACT_NOP               0x00
+
+/* Before this character, start a new token. */
+#define DATUM_TKN_CORE_ACT_START_PRE         0x10
+/* After this character, start a new token. */
+#define DATUM_TKN_CORE_ACT_START_POST        0x20
+
+/* All 'END' ACTs have this flag. */
+#define DATUM_TKN_CORE_ACT_END_FLAG          0x80
+
+/*
+ * Before the input character, end the current token.
+ * The tokenizer WILL be reset when this act is returned.
+ * Parsing resumes by re-parsing the input character.
+ */
+#define DATUM_TKN_CORE_ACT_END_PRE           0x80
+/* After this character, end the current token. */
+#define DATUM_TKN_CORE_ACT_END_POST          0x90
+
+/*
+ * Input parsing continues after this character (like END_POST).
+ * However, content ends before this character (like END_PRE).
  * This is used for strings. Strings end proper after the final '"', but that mustn't be included in content.
  */
-#define DATUM_TKN_CORE_POST_END_SKIP    0x0400
+#define DATUM_TKN_CORE_ACT_END_POSTSKIP      0xA0
 
-/* Token type for PRE_END */
-#define DATUM_TKN_CORE_PRE_MASK         0x00F0
-#define DATUM_TKN_CORE_PRE_SHIFT        4
-/* Token type for POST_END */
-#define DATUM_TKN_CORE_POST_MASK        0x000F
-#define DATUM_TKN_CORE_POST_SHIFT       0
+/*
+ * This act is a concatenation of START_POST and END_POST.
+ * This creates an empty content buffer.
+ */
+#define DATUM_TKN_CORE_ACT_END_ALONE         0xB0
 
 /*
  * Similar to CDEC, state must be initialized to 0.
@@ -203,6 +218,40 @@ DATUM_API int datum_tkn_core(int * state, int chrc);
  * * DATUM_TKNTY_ERROR (half-open string, CDEC error...)
  */
 DATUM_API datum_tknty_t datum_tkn_string(datum_str_t * input, datum_str_t * content);
+
+typedef enum {
+	/* String content. */
+	DATUM_TKNWR_ESCAPE_STRING,
+	/* Escape anything not VALIDPID. */
+	DATUM_TKNWR_ESCAPE_VALIDPID,
+	/* Escape anything not NUMSTART. (You probably want to set cannotEscape.) */
+	DATUM_TKNWR_ESCAPE_NUMSTART,
+	/* Escape anything not DIGIT. (You probably want to set cannotEscape.) */
+	DATUM_TKNWR_ESCAPE_DIGIT,
+	/* Escape anything not CONTENT. */
+	DATUM_TKNWR_ESCAPE_CONTENT,
+	/* Escape anything not CONTENT or SIGN. */
+	DATUM_TKNWR_ESCAPE_CONTENT_OR_SIGN
+} datum_tknwr_escape_t;
+
+/*
+ * These are bitflags representing errors.
+ */
+#define DATUM_TKNWR_UNREPRESENTABLE 1
+#define DATUM_TKNWR_IOERROR 2
+
+/*
+ * Escapes a single character into an fputc-like function.
+ * Same return values as datum_tknwr below.
+ */
+DATUM_API int datum_tknwr_escape(datum_tknwr_escape_t mode, int cannotEscape, char c, int (*put)(int c, void * stream), void * stream);
+
+/*
+ * Writes a token using an fputc-like function.
+ * It is assumed negative numbers are errors (i.e. EOF == -1).
+ * The function will not abort on IO error, but the error will be reported.
+ */
+DATUM_API int datum_tknwr(datum_tknty_t token, const datum_str_t * content, int (*put)(int c, void * stream), void * stream);
 
 #ifdef __cplusplus
 }

@@ -43,4 +43,9 @@ stateDiagram-v2
 	Start --> SpecialID: special-id = Begin
 	SpecialID --> SpecialID: potential-identifier = Continue
 	SpecialID --> [*]: * = Out(SpecialID)
+	Start --> ID: content = Begin, Continue
+	ID --> ID: potential-identifier = Continue
+	ID --> [*]: * = Out(ID)
 ```
+
+It is worth mentioning for clarity that while 'content' should be the only remaining class for ID, it is philosophically the fallback/default, and so is written that way in code.

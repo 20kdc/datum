@@ -10,6 +10,8 @@ Implementations exist for:
 * Rust [./rust](./rust)
 	* Usability improvements were trialled on `abandoned-rust-api-changes`, but I couldn't convince myself it wasn't going to cause a breaking API change.
 
+Work exists on a C implementation [./c](./c), but it's incomplete.
+
 It was originally developed for use in some of my Java programs for the purpose of fulfilling the role of 'terse data language,' with some key distinctions:
 
 * As free-form a syntax as reasonably possible.
