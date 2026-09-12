@@ -150,15 +150,30 @@ DATUM_API char * datum_cdec_collapse(char * start, char * end);
 
 /*
  * Tokenizer core.
+ *
  * This implements the *rules* of tokenization, but doesn't conveniently package them.
- * The tokenizer responds with an ACT.
+ *
+ * A character class (corresponding to an input character) is fed in.
+ * The tokenizer responds with an ACT, and mutates its state.
+ *
  * Remember that 'character' here means CDEC unit, so multiple `char` can be in a character.
- * These are split into:
+ *
+ * ACTs are split into:
  * * 'NOP' acts (more decoded characters needed, continue)
  * * 'START' acts (place token start marker before/after current character, continue)
  * * 'END' acts (finish token before/after current character, do not continue. tokenizer reset guaranteed)
+ *   * ACT_END_PRE requires the input NOT advance.
  *
  * Errors are returned with 'END' with the error token type.
+ *
+ * Regarding state:
+ *
+ * Similar to CDEC, state must be initialized to 0.
+ * Unlike CDEC, EOF is an explicit character class rather than implied by state.
+ * This is because EOF might i.e. end a token normally.
+ * The state == 0 check is still useful; if state == 0, it is a guarantee that the content start/end is meaningless.
+ * Conversely, the content start/end does not indicate the true token start, while the state change necessarily does.
+ * The state will always be 0 before a token starts, and will always be 0 immediately after it ends.
  */
 
 #define DATUM_TKN_CORE_ACT_MASK              0xF0
@@ -201,9 +216,7 @@ DATUM_API char * datum_cdec_collapse(char * start, char * end);
 #define DATUM_TKN_CORE_ACT_END_ALONE         0xB0
 
 /*
- * Similar to CDEC, state must be initialized to 0.
- * Unlike CDEC, EOF is an explicit character class rather than implied by state.
- * This is because EOF might i.e. end a token normally.
+ * See above description of tokenizer core.
  */
 DATUM_API int datum_tkn_core(int * state, int chrc);
 
