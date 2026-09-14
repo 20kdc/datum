@@ -5,7 +5,22 @@
  * A copy of the Unlicense should have been supplied as COPYING.txt in this repository. Alternatively, you can find it at <https://unlicense.org/>.
  */
 
+#include <inttypes.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <stdlib.h>
+#include <time.h>
+
 #include "datum.h"
+
+DATUM_API int datum_str_cstr_eq(const datum_str_t * str, const char * cstr) {
+	size_t str_len = str->end - str->start;
+	size_t cstr_len = strlen(cstr);
+	if (str_len != cstr_len)
+		return 0;
+	return !memcmp(str->start, cstr, str_len);
+}
 
 DATUM_API const char * datum_tknty_describe(datum_tknty_t ty) {
 	if (ty == DATUM_TKNTY_NONE) return "DATUM_TKNTY_NONE";
@@ -340,11 +355,11 @@ DATUM_API datum_tknty_t datum_tkn_string(datum_str_t * input, datum_str_t * cont
 	return DATUM_TKNTY_ERROR;
 }
 
-#define DATUM_TKNWR_PUT(C) { if (put(C, stream) < 0) error |= DATUM_TKNWR_IOERROR; }
+#define DATUM_TKNWR_PUT(C) { if (outf->put(C, outf->stream) < 0) error |= DATUM_TKNWR_IOERROR; }
 
 static const char datum_tknwr_hex[16] = "0123456789abcdef";
 
-DATUM_API int datum_tknwr_escape(datum_tknwr_escape_t mode, int cannotEscape, char c, int (*put)(int c, void * stream), void * stream) {
+DATUM_API int datum_tkn_escape(datum_tknwr_escape_t mode, int cannotEscape, char c, const datum_outf_t * outf) {
 	int error = 0;
 	int cls = datum_chrc_identify(c);
 	/* Things that always MUST be escaped to be written. */
@@ -417,7 +432,7 @@ DATUM_API int datum_tknwr_escape(datum_tknwr_escape_t mode, int cannotEscape, ch
 	return error;
 }
 
-DATUM_API int datum_tknwr(datum_tknty_t token, const datum_str_t * content, int (*put)(int c, void * stream), void * stream) {
+DATUM_API int datum_tkn_write(datum_tknty_t token, const datum_str_t * content, const datum_outf_t * outf) {
 	int error = 0;
 	const char * contentPtr = content->start;
 	switch (token) {
@@ -425,7 +440,7 @@ DATUM_API int datum_tknwr(datum_tknty_t token, const datum_str_t * content, int 
 			DATUM_TKNWR_PUT('"');
 			while (contentPtr != content->end) {
 				char c = *(contentPtr++);
-				error |= datum_tknwr_escape(DATUM_TKNWR_ESCAPE_STRING, 0, c, put, stream);
+				error |= datum_tkn_escape(DATUM_TKNWR_ESCAPE_STRING, 0, c, outf);
 			}
 			DATUM_TKNWR_PUT('"');
 			return error;
@@ -439,12 +454,11 @@ DATUM_API int datum_tknwr(datum_tknty_t token, const datum_str_t * content, int 
 			 * First character has to be CONTENT so this ends up an ID, unless the only character.
 			 * If it's the only character, it can be CONTENT or SIGN.
 			 */
-			error |= datum_tknwr_escape(
+			error |= datum_tkn_escape(
 				((contentPtr + 1) == content->end) ? DATUM_TKNWR_ESCAPE_CONTENT_OR_SIGN : DATUM_TKNWR_ESCAPE_CONTENT,
 				0,
 				*contentPtr,
-				put,
-				stream
+				outf
 			);
 			contentPtr++;
 			/*
@@ -453,7 +467,7 @@ DATUM_API int datum_tknwr(datum_tknty_t token, const datum_str_t * content, int 
 			validpid:
 			while (contentPtr != content->end) {
 				char c = *(contentPtr++);
-				error |= datum_tknwr_escape(DATUM_TKNWR_ESCAPE_VALIDPID, 0, c, put, stream);
+				error |= datum_tkn_escape(DATUM_TKNWR_ESCAPE_VALIDPID, 0, c, outf);
 			}
 			return error;
 		case DATUM_TKNTY_NUMERIC:
@@ -464,12 +478,11 @@ DATUM_API int datum_tknwr(datum_tknty_t token, const datum_str_t * content, int 
 			 * But if it is SIGN, it must be followed by *anything* to be valid.
 			 * So we lock out SIGN if content length is 1.
 			 */
-			error |= datum_tknwr_escape(
+			error |= datum_tkn_escape(
 				((contentPtr + 1) == content->end) ? DATUM_TKNWR_ESCAPE_DIGIT : DATUM_TKNWR_ESCAPE_NUMSTART,
 				1,
 				*contentPtr,
-				put,
-				stream
+				outf
 			);
 			contentPtr++;
 			/*
@@ -486,4 +499,177 @@ DATUM_API int datum_tknwr(datum_tknty_t token, const datum_str_t * content, int 
 		default:
 			return DATUM_TKNWR_UNREPRESENTABLE;
 	}
+}
+
+DATUM_API int datum_atom_parse_num(const datum_str_t * content, datum_atom_t * atom) {
+	/*
+	 * This is where things get 'controversial' in terms of sensible memory behaviour.
+	 * To use strtod, we need a traditional C string.
+	 * So, we need to copy across the number.
+	 */
+	size_t numSz = content->end - content->start;
+	char * tmp = (void *) malloc(numSz + 1);
+	char * endptr = NULL;
+	if (!tmp)
+		return 1;
+	memcpy(tmp, content->start, numSz);
+	tmp[numSz] = 0;
+	/* check if this might be a valid integer */
+	if (tmp[0] == '-') {
+		if (strspn(tmp + 1, "0123456789") == numSz - 1)
+			goto parseint; /* valid negative integer */
+	} else if (strspn(tmp, "0123456789") == numSz) {
+		/* valid positive integer */
+		parseint:
+		atom->type = DATUM_ATOMTY_INT;
+		atom->content.intnum = strtoll(tmp, &endptr, 10);
+		goto done;
+	}
+	/* whatever approach was chosen failed, so try as float */
+	atom->type = DATUM_ATOMTY_FLOAT;
+	atom->content.fpnum = strtod(tmp, &endptr);
+	done:
+	free(tmp);
+	return endptr != (tmp + numSz);
+}
+
+#ifndef INFINITY
+#define INFINITY (1.0 / 0.0)
+#endif
+
+#ifndef NAN
+#define NAN (-(0.0 / 0.0))
+#endif
+
+DATUM_API int datum_atom_parse(datum_tknty_t token, const datum_str_t * content, datum_atom_t * atom) {
+	const char * rdptr = content->start;
+	/* Set this 'just to be sure'. */
+	atom->type = DATUM_ATOMTY_NIL;
+	switch (token) {
+		default:
+			/* This cannot be converted. */
+			return 1;
+		case DATUM_TKNTY_STRING:
+			atom->type = DATUM_ATOMTY_STRING;
+			atom->content.symbol = *content;
+			return 0;
+		case DATUM_TKNTY_ID:
+			atom->type = DATUM_ATOMTY_SYMBOL;
+			atom->content.symbol = *content;
+			return 0;
+		case DATUM_TKNTY_SPECIAL_ID:
+			if (datum_str_cstr_eq(content, "nil")) {
+				atom->type = DATUM_ATOMTY_NIL;
+				return 0;
+			} else if (datum_str_cstr_eq(content, "f")) {
+				atom->type = DATUM_ATOMTY_FALSE;
+				return 0;
+			} else if (datum_str_cstr_eq(content, "t")) {
+				atom->type = DATUM_ATOMTY_TRUE;
+				return 0;
+			} else if (datum_str_cstr_eq(content, "{}#")) {
+				/* Empty symbol, so 'fake it'. */
+				atom->type = DATUM_ATOMTY_SYMBOL;
+				atom->content.symbol.start = atom->content.symbol.end = content->start;
+				return 0;
+			} else if (datum_str_cstr_eq(content, "i+inf.0")) {
+				atom->type = DATUM_ATOMTY_FLOAT;
+				atom->content.fpnum = INFINITY;
+				return 0;
+			} else if (datum_str_cstr_eq(content, "i-inf.0")) {
+				atom->type = DATUM_ATOMTY_FLOAT;
+				atom->content.fpnum = -INFINITY;
+				return 0;
+			} else if (datum_str_cstr_eq(content, "i+nan.0")) {
+				atom->type = DATUM_ATOMTY_FLOAT;
+				atom->content.fpnum = NAN;
+				return 0;
+			} else if (content->start != content->end && content->start[0] == 'x') {
+				/* Hexadecimal integer. */
+				atom->type = DATUM_ATOMTY_INT;
+				atom->content.intnum = 0;
+				rdptr++;
+				while (rdptr != content->end) {
+					char chr = *(rdptr++);
+					atom->content.intnum <<= 4;
+					if (chr >= '0' && chr <= '9') {
+						atom->content.intnum += chr - '0';
+					} else if (chr >= 'a' && chr <= 'f') {
+						atom->content.intnum += (chr - 'a') + 0xA;
+					} else if (chr >= 'A' && chr <= 'F') {
+						atom->content.intnum += (chr - 'A') + 0xA;
+					} else {
+						return 1;
+					}
+				}
+				return 0;
+			}
+			return 1;
+		case DATUM_TKNTY_NUMERIC:
+			return datum_atom_parse_num(content, atom);
+	}
+}
+
+/*
+ * Like datum_atom_parse. Performs content collapse internally.
+ */
+DATUM_API int datum_atom_collapse_parse(datum_tknty_t token, datum_str_t * content, datum_atom_t * atom) {
+	 content->end = datum_cdec_collapse((char *) content->start, (char *) content->end);
+	 return datum_atom_parse(token, content, atom);
+}
+
+DATUM_API int datum_atom_write(const datum_atom_t * atom, const datum_outf_t * outf) {
+	int error = 0;
+	/* 20 digits 'should be enough' it seems, make it 32 to be safe */
+	char fmtbuf[32];
+	char * fmtptr = fmtbuf;
+	switch (atom->type) {
+		case DATUM_ATOMTY_NIL:
+			DATUM_TKNWR_PUT('#');
+			DATUM_TKNWR_PUT('n');
+			DATUM_TKNWR_PUT('i');
+			DATUM_TKNWR_PUT('l');
+			break;
+		case DATUM_ATOMTY_TRUE:
+			DATUM_TKNWR_PUT('#');
+			DATUM_TKNWR_PUT('t');
+			break;
+		case DATUM_ATOMTY_FALSE:
+			DATUM_TKNWR_PUT('#');
+			DATUM_TKNWR_PUT('f');
+			break;
+		case DATUM_ATOMTY_STRING:
+			error |= datum_tkn_write(DATUM_TKNTY_STRING, &atom->content.string, outf);
+			break;
+		case DATUM_ATOMTY_SYMBOL:
+			if (atom->content.symbol.start == atom->content.symbol.end) {
+				DATUM_TKNWR_PUT('#');
+				DATUM_TKNWR_PUT('{');
+				DATUM_TKNWR_PUT('}');
+				DATUM_TKNWR_PUT('#');
+			} else {
+				error |= datum_tkn_write(DATUM_TKNTY_ID, &atom->content.symbol, outf);
+			}
+			break;
+		case DATUM_ATOMTY_INT:
+			sprintf(fmtbuf, "%" PRIi64, atom->content.intnum);
+			goto formatted;
+		case DATUM_ATOMTY_FLOAT:
+			if (isnan(atom->content.fpnum)) {
+				strcpy(fmtbuf, "#i+nan.0");
+				goto formatted;
+			} else if (isinf(atom->content.fpnum) == 1) {
+				strcpy(fmtbuf, "#i+inf.0");
+				goto formatted;
+			} else if (isinf(atom->content.fpnum) == -1) {
+				strcpy(fmtbuf, "#i-inf.0");
+				goto formatted;
+			}
+			sprintf(fmtbuf, "%.17g", atom->content.fpnum);
+			formatted:
+			while (*fmtptr)
+				DATUM_TKNWR_PUT(*(fmtptr++));
+			break;
+	}
+	return error;
 }

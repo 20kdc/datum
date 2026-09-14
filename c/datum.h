@@ -12,7 +12,6 @@
  * * Enough APIs for construction of simple DSLs
  * Scope is NOT:
  * * AST
- * * Atom comprehension (implies floats)
  * * Anything that requires malloc, free
  */
 
@@ -49,6 +48,11 @@ typedef struct datum_str {
 } datum_str_t;
 
 /*
+ * Check if a Datum string is equal to a C string.
+ */
+DATUM_API int datum_str_cstr_eq(const datum_str_t * str, const char * cstr);
+
+/*
  * Source location type.
  */
 typedef struct datum_loc {
@@ -56,6 +60,21 @@ typedef struct datum_loc {
 	void * loc;
 	int lineNumber;
 } datum_loc_t;
+
+/*
+ * 'Output file' stream.
+ * Intentionally designed such that you can use fputc directly without writing a wrapper.
+ */
+typedef struct datum_outf {
+	/*
+	 * An fputc-like function.
+	 * It is assumed negative numbers are errors (i.e. EOF <= -1).
+	 * Errors do not abort output, but are signalled.
+	 */
+	int (*put)(int c, void * stream);
+	/* Stream value for 'put' function. */
+	void * stream;
+} datum_outf_t;
 
 /*
  * Token type.
@@ -257,14 +276,67 @@ typedef enum {
  * Escapes a single character into an fputc-like function.
  * Same return values as datum_tknwr below.
  */
-DATUM_API int datum_tknwr_escape(datum_tknwr_escape_t mode, int cannotEscape, char c, int (*put)(int c, void * stream), void * stream);
+DATUM_API int datum_tkn_escape(datum_tknwr_escape_t mode, int cannotEscape, char c, const datum_outf_t * outf);
 
 /*
- * Writes a token using an fputc-like function.
- * It is assumed negative numbers are errors (i.e. EOF == -1).
+ * Writes a token to an outf stream.
  * The function will not abort on IO error, but the error will be reported.
  */
-DATUM_API int datum_tknwr(datum_tknty_t token, const datum_str_t * content, int (*put)(int c, void * stream), void * stream);
+DATUM_API int datum_tkn_write(datum_tknty_t token, const datum_str_t * content, const datum_outf_t * outf);
+
+/*
+ * An 'atom' is any value other than a list.
+ * More usefully, the 'atom' abstraction covers much of the data model of Datum.
+ * It's therefore useful if you aren't doing anything unusual with special IDs, etc.
+ */
+
+typedef enum {
+	DATUM_ATOMTY_NIL,
+	DATUM_ATOMTY_FALSE,
+	DATUM_ATOMTY_TRUE,
+	DATUM_ATOMTY_STRING,
+	DATUM_ATOMTY_SYMBOL,
+	DATUM_ATOMTY_INT,
+	DATUM_ATOMTY_FLOAT
+} datum_atomty_t;
+
+typedef struct datum_atom {
+	datum_atomty_t type;
+	union {
+		datum_str_t string;
+		datum_str_t symbol;
+		int64_t intnum;
+		double fpnum;
+	} content;
+} datum_atom_t;
+
+/*
+ * Tries to parse a number.
+ * Security note:
+ * Due to a problem parsing numeric strings with the standard C library, this function can internally malloc() and free() a copy of the content.
+ */
+DATUM_API int datum_atom_parse_num(const datum_str_t * content, datum_atom_t * atom);
+
+/*
+ * Parses an atom from collapsed contents.
+ * Just to emphasize: datum_cdec_collapse must be used first.
+ * Security note:
+ * Due to a problem parsing numeric strings with the standard C library, this function can internally malloc() and free() a copy of the content.
+ * Returns non-zero on error.
+ */
+DATUM_API int datum_atom_parse(datum_tknty_t token, const datum_str_t * content, datum_atom_t * atom);
+
+/*
+ * Wrapper for datum_atom_parse.
+ * Performs content collapse internally via datum_cdec_collapse, so the content-string will be mutated.
+ */
+DATUM_API int datum_atom_collapse_parse(datum_tknty_t token, datum_str_t * content, datum_atom_t * atom);
+
+/*
+ * Writes an atom.
+ * Returns the TKNWR errors.
+ */
+DATUM_API int datum_atom_write(const datum_atom_t * atom, const datum_outf_t * outf);
 
 #ifdef __cplusplus
 }

@@ -13,9 +13,9 @@
 
 #define FILE_BUF_SIZE 0x10000
 
-char buf_input[FILE_BUF_SIZE];
-char buf_compare[FILE_BUF_SIZE];
-char buf_output[FILE_BUF_SIZE];
+char buf_input[FILE_BUF_SIZE + 1];
+char buf_compare[FILE_BUF_SIZE + 1];
+char buf_output[FILE_BUF_SIZE + 1];
 char * buf_output_ptr = buf_output;
 
 datum_str_t readfile(char * buf, const char * fn) {
@@ -49,6 +49,14 @@ int outputfn(int c, void * stream) {
 	return 0;
 }
 
+datum_outf_t outputstr = {outputfn, NULL};
+
+void dumpstr(const datum_str_t * str) {
+	const char * report_ptr = str->start;
+	while (report_ptr != str->end)
+		putchar(*(report_ptr++));
+}
+
 void dumpoutput() {
 	const char * report_ptr = buf_output;
 	while (report_ptr != buf_output_ptr)
@@ -69,6 +77,8 @@ int main(int argc, char ** argv) {
 	while (input.start != input.end) {
 		datum_str_t content;
 		datum_tknty_t tknt = datum_tkn_string(&input, &content);
+		int isatom = 0;
+		datum_atom_t atom;
 		if (tknt == DATUM_TKNTY_ERROR) {
 			printf("roundtrip: Unexpected error reading %s - dumping output so far", argv[1]);
 			dumpoutput();
@@ -81,12 +91,29 @@ int main(int argc, char ** argv) {
 				outputfn(' ', NULL);
 			space = 0;
 		}
+		content.end = datum_cdec_collapse((char *) content.start, (char *) content.end);
 		if (tknt == DATUM_TKNTY_LIST_START)
 			listdepth++;
 		else if (tknt == DATUM_TKNTY_LIST_END)
 			listdepth--;
-		content.end = datum_cdec_collapse((char *) content.start, (char *) content.end);
-		if (datum_tknwr(tknt, &content, outputfn, NULL)) {
+		else {
+			/* This should be an atom. */
+			if (datum_atom_parse(tknt, &content, &atom)) {
+				fputs("roundtrip: '", stdout);
+				dumpstr(&content);
+				fputs("' did not read as atom\n", stdout);
+			} else {
+				isatom = 1;
+			}
+		}
+		/* Write either as a token directly or an atom. */
+		if (isatom) {
+			if (datum_atom_write(&atom, &outputstr)) {
+				printf("roundtrip: Unexpected error atomwrite %s - dumping output so far", argv[1]);
+				dumpoutput();
+				return 1;
+			}
+		} else if (datum_tkn_write(tknt, &content, &outputstr)) {
 			printf("roundtrip: Unexpected error mimicking %s - dumping output so far", argv[1]);
 			dumpoutput();
 			return 1;

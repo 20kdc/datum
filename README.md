@@ -9,8 +9,8 @@ Implementations exist for:
 * Java [./java](./java)
 * Rust [./rust](./rust)
 	* Usability improvements were trialled on `abandoned-rust-api-changes`, but I couldn't convince myself it wasn't going to cause a breaking API change.
-
-Work exists on a C implementation [./c](./c), but it's incomplete.
+* C [./c](./c)
+	* Not yet practically tested and has no 'AST' (managed lists) support. More ergonomic path is dependent on data being in-memory before reading. 'Atom' API uses malloc/free.
 
 It was originally developed for use in some of my Java programs for the purpose of fulfilling the role of 'terse data language,' with some key distinctions:
 
