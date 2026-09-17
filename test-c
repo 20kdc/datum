@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
-CFLAGS="-g -I c -std=c89 -Wpedantic"
-cc -o examples/c/tokenize c/datum.c examples/c/tokenize.c $CFLAGS
-cc -o examples/c/roundtrip c/datum.c examples/c/roundtrip.c $CFLAGS
+CFLAGS="-g -I c/include -std=c89 -Wpedantic"
+cc -o examples/c/tokenize c/src/datum.c examples/c/tokenize.c $CFLAGS
+cc -o examples/c/roundtrip c/src/datum.c examples/c/roundtrip.c $CFLAGS
 
 # examples/c/tokenize < doc/roundtrip-input.scm
 examples/c/roundtrip doc/roundtrip-input.scm doc/roundtrip-output.scm
